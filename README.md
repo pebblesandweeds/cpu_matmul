@@ -41,8 +41,8 @@ The script outputs the elapsed time for matrix multiplication, total FLOP, and G
 
 The following performance metrics were achieved using the simple Python/Numpy script provided in this repository. Note that these results are preliminary and will be improved upon with the upcoming C implementation.
 
-* Apple M2: ~1000 GFLOPS (matrix size: 16384x16384)
-* 2x AMD EPYC 7713 64-Core (128 cores total): ~3000 GFLOPS (matrix size: 16384x16384)
+* Apple M2: ~1000+ GFLOPS @ 32-bit precision (matrix size: 16384x16384)
+* 2x AMD EPYC 7713 64-Core (128 cores total): ~3000+ GFLOPS @ 32-bit precision (matrix size: 16384x16384)
 
 ## License
 -------
