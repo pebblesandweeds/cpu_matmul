@@ -42,9 +42,11 @@ Both the Python and C scripts output the elapsed time for matrix multiplication,
         - `main.c`: The main program to run matrix multiplication.
         - `matmul_lib.c`: Library containing naive and optimized blocked matrix multiplication functions.
         - `time_utils.c`: Utility library for timing functions.
+        - `check_utils.c`: Library for spot-checking matrix multiplication results.
     + `include/`: Header files for C implementation.
         - `matmul_lib.h`: Header for matrix multiplication functions.
         - `time_utils.h`: Header for timing utility functions.
+        - `check_utils.h`: Header for spot-checking matrix multiplication results.
 * `python/`: Python script for matrix multiplication using Numpy.
     + `numpy_matmul.py`: The Python script.
     + `requirements.txt`: List of required Python packages.
