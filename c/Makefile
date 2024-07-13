@@ -14,7 +14,7 @@ SRC_DIR = src
 OBJ_DIR = obj
 
 # Source files
-SRC = $(SRC_DIR)/main.c $(SRC_DIR)/matmul_lib.c $(SRC_DIR)/time_utils.c
+SRC = $(SRC_DIR)/main.c $(SRC_DIR)/matmul_lib.c $(SRC_DIR)/time_utils.c $(SRC_DIR)/check_utils.c
 
 # Object files
 OBJ = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC))
