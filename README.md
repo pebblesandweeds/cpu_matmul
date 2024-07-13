@@ -1,10 +1,8 @@
 # Matrix Multiplication on CPUs
-==========================
 
 This repository explores matrix multiplication on CPUs using Python/Numpy and C, with a focus on trying to implement C code from scratch to match Python/Numpy GFLOPS performance.   
 
 ## Getting Started
----------------
 
 ### Prerequisites
 
@@ -12,7 +10,8 @@ This repository explores matrix multiplication on CPUs using Python/Numpy and C,
 * Numpy (install using `pip install -r python/requirements.txt`)
 * GCC compiler
     - On Linux: `gcc`
-    - Initial naive C implementation will work on Apple MacOS: `gcc-14` (install with Homebrew)
+    - Naive C implementation will work on Apple MacOS: `gcc-14` (install with Homebrew)
+    - Code will be optimized for AMD so future optimizations will most likely not work on Apple silicon
 
 ### Installation
 
@@ -20,7 +19,6 @@ This repository explores matrix multiplication on CPUs using Python/Numpy and C,
 2. Install the required Python packages using `pip install -r python/requirements.txt`.
 
 ## Usage
------
 
 ### Running the Python Script
 
@@ -36,12 +34,17 @@ Run the code using `./c/matmul` (assuming you are in the root of the repo)
 Both the Python and C scripts output the elapsed time for matrix multiplication, total FLOP, and GFLOPS performance.
 
 ## Project Structure
------------------
 
 * `/`: Root directory
 * `c/`: Future implementation of matrix multiplication in C.
-    + `c_matmul.c`: The C code for matrix multiplication.
     + `Makefile`: Makefile for compiling the C code.
+    + `src/`: Source files for C implementation.
+        - `main.c`: The main program to run matrix multiplication.
+        - `matmul_lib.c`: Library containing naive and optimized blocked matrix multiplication functions.
+        - `time_utils.c`: Utility library for timing functions.
+    + `include/`: Header files for C implementation.
+        - `matmul_lib.h`: Header for matrix multiplication functions.
+        - `time_utils.h`: Header for timing utility functions.
 * `python/`: Python script for matrix multiplication using Numpy.
     + `numpy_matmul.py`: The Python script.
     + `requirements.txt`: List of required Python packages.
@@ -50,20 +53,19 @@ Both the Python and C scripts output the elapsed time for matrix multiplication,
 * `LICENSE`: License information.
 
 ## Performance Metrics
---------------------
 
 The following performance metrics were achieved using the simple Python/Numpy script provided in this repository. Note that these results are preliminary and will be improved upon with the upcoming C implementation.
 
 ### Python/Numpy Performance Metrics
-* Apple M2: ~1000+ GFLOPS @ 32-bit precision (matrix size: 16384x16384)
-* 2x AMD EPYC 7713 64-Core (128 cores total): ~3000+ GFLOPS @ 32-bit precision (matrix size: 16384x16384)
+* 2x AMD EPYC 7713 64-Core (128 cores total): ~3000+ GFLOPS @ 32-bit precision
 
 ### Naive C Implementation Performance Metrics
-* Apple M2: ~1 GFLOPS
 * 2x AMD EPYC 7713 64-Core (128 cores total): ~15+ GFLOPS
 
+### Optimized block C Implementation Performance Metrics
+* 2x AMD EPYC 7713 64-Core (128 cores total): ~40+ GFLOPS
+
 ## License
--------
 
 This project is released under the MIT License.
 
