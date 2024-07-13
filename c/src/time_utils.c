@@ -1,5 +1,6 @@
 #include "../include/time_utils.h"
 #include <sys/time.h>
+#include <stddef.h>
 
 double get_time() {
     struct timeval tv;
