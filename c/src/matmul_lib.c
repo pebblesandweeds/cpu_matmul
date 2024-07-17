@@ -35,18 +35,26 @@ void matmul(float A[N][N], float B[N][N], float C[N][N]) {
 }
 
 void matmul_blocked(float A[N][N], float B[N][N], float C[N][N]) {
-	#pragma omp parallel for collapse(2)
-	for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
-		for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
-			for (int kk = 0; kk < N; kk += BLOCK_SIZE) {
-				for (int i = ii; i < ii + BLOCK_SIZE && i < N; i++) {
-					for (int j = jj; j < jj + BLOCK_SIZE && j < N; j++) {
-						for (int k = kk; k < kk + BLOCK_SIZE && k < N; k++) {
-							C[i][j] += A[i][k] * B[k][j];
-						}
-					}
-				}
-			}
-		}
-	}
+    #pragma omp parallel for collapse(3)
+    for (int i = 0; i < N; i += BLOCK_SIZE) {
+        for (int j = 0; j < N; j += BLOCK_SIZE) {
+            for (int k = 0; k < N; k += BLOCK_SIZE) {
+                for (int ii = i; ii < i + BLOCK_SIZE && ii < N; ii += TILE_SIZE) {
+                    for (int jj = j; jj < j + BLOCK_SIZE && jj < N; jj += TILE_SIZE) {
+                        for (int kk = k; kk < k + BLOCK_SIZE && kk < N; kk += UNROLL_FACTOR) {
+                            for (int iii = ii; iii < ii + TILE_SIZE && iii < i + BLOCK_SIZE && iii < N; iii++) {
+                                for (int jjj = jj; jjj < jj + TILE_SIZE && jjj < j + BLOCK_SIZE && jjj < N; jjj++) {
+                                    float c_temp = C[iii][jjj];
+                                    for (int kkk = kk; kkk < kk + UNROLL_FACTOR && kkk < k + BLOCK_SIZE && kkk < N; kkk++) {
+                                        c_temp += A[iii][kkk] * B[kkk][jjj];
+                                    }
+                                    C[iii][jjj] = c_temp;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
