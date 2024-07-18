@@ -11,8 +11,9 @@ int main() {
     float (*B)[N] = malloc(sizeof(float[N][N]));
     float (*C_naive)[N] = malloc(sizeof(float[N][N]));
     float (*C_blocked)[N] = malloc(sizeof(float[N][N]));
+    float (*C_loop_order)[N] = malloc(sizeof(float[N][N]));
 
-    if (A == NULL || B == NULL || C_naive == NULL || C_blocked == NULL) {
+     if (A == NULL || B == NULL || C_naive == NULL || C_blocked == NULL || C_loop_order == NULL) {   
         printf("Memory allocation failed\n");
         return 1;
     }
@@ -23,6 +24,7 @@ int main() {
     init_matrix(B);
     zero_matrix(C_naive);
     zero_matrix(C_blocked);
+    zero_matrix(C_loop_order);
 
     // See Python Numpy code comments for FLOP calculation explanation
     long long flop = 2LL * N * N * N;
@@ -41,9 +43,16 @@ int main() {
     double gflops_blocked = (flop / time_blocked) / 1e9;
     printf("Blocked matmul: %.2f GFLOPS\n", gflops_blocked);
 
+    // Matmul with loop order
+    double time_loop_order = timed_matmul(matmul_loop_order, A, B, C_loop_order);
+    printf("Loop order matmul time taken: %.6f seconds\n", time_loop_order);
+    double gflops_loop_order = (flop / time_loop_order) / 1e9;
+    printf("Loop order matmul: %.2f GFLOPS\n", gflops_loop_order);
+
     // Check matrices
-    bool matrices_match = check_matrices(C_naive, C_blocked, 1e-5);
-    if (matrices_match) {
+    bool matrices_match_naive_blocked = check_matrices(C_naive, C_blocked, 1e-5);
+    bool matrices_match_naive_loop_order = check_matrices(C_naive, C_loop_order, 1e-5);
+    if (matrices_match_naive_blocked && matrices_match_naive_loop_order) {    
         printf("Matrices match within tolerance.\n");
     } else {
         printf("Matrices do not match within tolerance.\n");
@@ -53,6 +62,7 @@ int main() {
     free(B);
     free(C_naive);
     free(C_blocked);
+    free(C_loop_order);
 
     return 0;
 }

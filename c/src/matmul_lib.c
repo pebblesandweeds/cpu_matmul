@@ -58,3 +58,15 @@ void matmul_blocked(float A[N][N], float B[N][N], float C[N][N]) {
         }
     }
 }
+
+void matmul_loop_order(float A[N][N], float B[N][N], float C[N][N]) {
+    #pragma omp parallel for collapse(2)
+    for (int i = 0; i < N; i++) {
+        for (int k = 0; k < N; k++) {
+            for (int j = 0; j < N; j++) {
+                C[i][j] += A[i][k] * B[k][j];
+            }
+        }
+    }
+}
+
