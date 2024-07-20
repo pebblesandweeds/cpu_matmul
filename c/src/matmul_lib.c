@@ -1,6 +1,7 @@
 #include "../include/matmul_lib.h"
 #include <stdlib.h>
 #include <omp.h>
+#include <math.h>
 
 // Similar to Numpy but this function will generate a uniform distribution between -1 and 1
 // However, Numpy + Python will generate a normal distribution (bell curve centered at 0) while this function will not
@@ -26,7 +27,6 @@ void matmul(float A[N][N], float B[N][N], float C[N][N]) {
     #pragma omp parallel for collapse(2)
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
-            C[i][j] = 0.0f;
             for (int k = 0; k < N; k++) {
                 C[i][j] += A[i][k] * B[k][j];
             }
@@ -60,13 +60,59 @@ void matmul_blocked(float A[N][N], float B[N][N], float C[N][N]) {
 }
 
 void matmul_loop_order(float A[N][N], float B[N][N], float C[N][N]) {
-    #pragma omp parallel for collapse(2)
-    for (int i = 0; i < N; i++) {
-        for (int k = 0; k < N; k++) {
-            for (int j = 0; j < N; j++) {
-                C[i][j] += A[i][k] * B[k][j];
+    int i, j, k;
+    register float sum0, sum1, sum2, sum3;
+    register float Aik;
+    float *bp0_pntr, *bp1_pntr, *bp2_pntr, *bp3_pntr;
+
+    #pragma omp parallel for collapse(2) private(i, j, k, sum0, sum1, sum2, sum3, Aik, bp0_pntr, bp1_pntr, bp2_pntr, bp3_pntr)
+    for (j = 0; j < N; j += 4) {       
+        for (i = 0; i < N; i++) {     
+            sum0 = 0.0;
+            sum1 = 0.0;
+            sum2 = 0.0;
+            sum3 = 0.0;
+
+            bp0_pntr = &B[0][j];
+            bp1_pntr = &B[0][j + 1];
+            bp2_pntr = &B[0][j + 2];
+            bp3_pntr = &B[0][j + 3];
+
+            for (k = 0; k < N; k += 4) {  
+                Aik = A[i][k];
+                sum0 += Aik * *bp0_pntr;
+                sum1 += Aik * *bp1_pntr;
+                sum2 += Aik * *bp2_pntr;
+                sum3 += Aik * *bp3_pntr;
+
+                Aik = A[i][k + 1];
+                sum0 += Aik * *(bp0_pntr + N);
+                sum1 += Aik * *(bp1_pntr + N);
+                sum2 += Aik * *(bp2_pntr + N);
+                sum3 += Aik * *(bp3_pntr + N);
+
+                Aik = A[i][k + 2];
+                sum0 += Aik * *(bp0_pntr + 2 * N);
+                sum1 += Aik * *(bp1_pntr + 2 * N);
+                sum2 += Aik * *(bp2_pntr + 2 * N);
+                sum3 += Aik * *(bp3_pntr + 2 * N);
+
+                Aik = A[i][k + 3];
+                sum0 += Aik * *(bp0_pntr + 3 * N);
+                sum1 += Aik * *(bp1_pntr + 3 * N);
+                sum2 += Aik * *(bp2_pntr + 3 * N);
+                sum3 += Aik * *(bp3_pntr + 3 * N);
+
+                bp0_pntr += 4 * N;
+                bp1_pntr += 4 * N;
+                bp2_pntr += 4 * N;
+                bp3_pntr += 4 * N;
             }
+
+            C[i][j] += sum0;
+            C[i][j + 1] += sum1;
+            C[i][j + 2] += sum2;
+            C[i][j + 3] += sum3;
         }
     }
 }
-

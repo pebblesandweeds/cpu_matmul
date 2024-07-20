@@ -43,6 +43,14 @@ int main() {
     double gflops_blocked = (flop / time_blocked) / 1e9;
     printf("Blocked matmul: %.2f GFLOPS\n", gflops_blocked);
 
+    // Check matrices
+    bool matrices_match_naive_blocked = check_matrices(C_naive, C_blocked, 1e-5);
+    if (matrices_match_naive_blocked) {    
+        printf("Matrices match within tolerance.\n");
+    } else {
+        printf("Matrices do not match within tolerance.\n");
+    }
+
     // Matmul with loop order
     double time_loop_order = timed_matmul(matmul_loop_order, A, B, C_loop_order);
     printf("Loop order matmul time taken: %.6f seconds\n", time_loop_order);
@@ -50,9 +58,8 @@ int main() {
     printf("Loop order matmul: %.2f GFLOPS\n", gflops_loop_order);
 
     // Check matrices
-    bool matrices_match_naive_blocked = check_matrices(C_naive, C_blocked, 1e-5);
     bool matrices_match_naive_loop_order = check_matrices(C_naive, C_loop_order, 1e-5);
-    if (matrices_match_naive_blocked && matrices_match_naive_loop_order) {    
+    if (matrices_match_naive_loop_order) {    
         printf("Matrices match within tolerance.\n");
     } else {
         printf("Matrices do not match within tolerance.\n");
