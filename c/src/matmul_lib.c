@@ -35,7 +35,7 @@ void matmul(float A[N][N], float B[N][N], float C[N][N]) {
     }
 }
 
-void matmul_blocked(float A[N][N], float B[N][N], float C[N][N]) {
+void matmul_scalar(float A[N][N], float B[N][N], float C[N][N]) {
     #pragma omp parallel for collapse(3)
     for (int i = 0; i < N; i += BLOCK_SIZE) {
         for (int j = 0; j < N; j += BLOCK_SIZE) {
@@ -60,7 +60,7 @@ void matmul_blocked(float A[N][N], float B[N][N], float C[N][N]) {
     }
 }
 
-void matmul_loop_order(float A[N][N], float B[N][N], float C[N][N]) {
+void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
 	int i, j, k;
     __m256 sum0, sum1, sum2, sum3;
     __m256 Aik;

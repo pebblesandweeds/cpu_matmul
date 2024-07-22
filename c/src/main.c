@@ -10,10 +10,10 @@ int main() {
     float (*A)[N] = malloc(sizeof(float[N][N]));
     float (*B)[N] = malloc(sizeof(float[N][N]));
     float (*C_naive)[N] = malloc(sizeof(float[N][N]));
-    float (*C_blocked)[N] = malloc(sizeof(float[N][N]));
-    float (*C_loop_order)[N] = malloc(sizeof(float[N][N]));
+    float (*C_scalar)[N] = malloc(sizeof(float[N][N]));
+    float (*C_vectorized)[N] = malloc(sizeof(float[N][N]));
 
-     if (A == NULL || B == NULL || C_naive == NULL || C_blocked == NULL || C_loop_order == NULL) {   
+     if (A == NULL || B == NULL || C_naive == NULL || C_scalar == NULL || C_vectorized == NULL) {   
         printf("Memory allocation failed\n");
         return 1;
     }
@@ -23,8 +23,8 @@ int main() {
     init_matrix(A);
     init_matrix(B);
     zero_matrix(C_naive);
-    zero_matrix(C_blocked);
-    zero_matrix(C_loop_order);
+    zero_matrix(C_scalar);
+    zero_matrix(C_vectorized);
 
     // See Python Numpy code comments for FLOP calculation explanation
     long long flop = 2LL * N * N * N;
@@ -37,29 +37,29 @@ int main() {
     double gflops_naive = (flop / time_naive) / 1e9;
     printf("Naive matmul: %.2f GFLOPS\n", gflops_naive);
 
-    // Matmul with blocks
-    double time_blocked = timed_matmul(matmul_blocked, A, B, C_blocked);
-    printf("Blocked matmul time taken: %.6f seconds\n", time_blocked);
-    double gflops_blocked = (flop / time_blocked) / 1e9;
-    printf("Blocked matmul: %.2f GFLOPS\n", gflops_blocked);
+    // Matmul with scalars 
+    double time_scalar = timed_matmul(matmul_scalar, A, B, C_scalar);
+    printf("Scalar matmul time taken: %.6f seconds\n", time_scalar);
+    double gflops_scalar = (flop / time_scalar) / 1e9;
+    printf("Scalar matmul: %.2f GFLOPS\n", gflops_scalar);
 
     // Check matrices
-    bool matrices_match_naive_blocked = check_matrices(C_naive, C_blocked, 1e-5);
-    if (matrices_match_naive_blocked) {    
+    bool matrices_match_naive_scalar = check_matrices(C_naive, C_scalar, 1e-5);
+    if (matrices_match_naive_scalar) {    
         printf("Matrices match within tolerance.\n");
     } else {
         printf("Matrices do not match within tolerance.\n");
     }
 
-    // Matmul with loop order
-    double time_loop_order = timed_matmul(matmul_loop_order, A, B, C_loop_order);
-    printf("Loop order matmul time taken: %.6f seconds\n", time_loop_order);
-    double gflops_loop_order = (flop / time_loop_order) / 1e9;
-    printf("Loop order matmul: %.2f GFLOPS\n", gflops_loop_order);
+    // Matmul with vectors 
+    double time_vectorized = timed_matmul(matmul_vectorized, A, B, C_vectorized);
+    printf("Vectorized matmul time taken: %.6f seconds\n", time_vectorized);
+    double gflops_vectorized = (flop / time_vectorized) / 1e9;
+    printf("Vectorized matmul: %.2f GFLOPS\n", gflops_vectorized);
 
     // Check matrices
-    bool matrices_match_naive_loop_order = check_matrices(C_naive, C_loop_order, 1e-5);
-    if (matrices_match_naive_loop_order) {    
+    bool matrices_match_naive_vectorized = check_matrices(C_naive, C_vectorized, 1e-5);
+    if (matrices_match_naive_vectorized) {    
         printf("Matrices match within tolerance.\n");
     } else {
         printf("Matrices do not match within tolerance.\n");
@@ -68,8 +68,8 @@ int main() {
     free(A);
     free(B);
     free(C_naive);
-    free(C_blocked);
-    free(C_loop_order);
+    free(C_scalar);
+    free(C_vectorized);
 
     return 0;
 }
