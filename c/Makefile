@@ -2,8 +2,7 @@
 CC = gcc
 
 # Compiler flags
-// CFLAGS = -fopenmp -O2 -march=native -I./include
-CFLAGS = -fopenmp -O3 -march=armv8-a -mtune=apple-m1 -funroll-loops -ffast-math -fomit-frame-pointer -flto -I./include
+CFLAGS = -fopenmp -O2 -march=native -I./include
 
 # Executable name
 EXEC = matmul
