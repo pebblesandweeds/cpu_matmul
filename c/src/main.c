@@ -2,16 +2,17 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
+#include <immintrin.h>
 #include "../include/matmul_lib.h"
 #include "../include/time_utils.h"
 #include "../include/check_utils.h"
 
 int main() {
-    float (*A)[N] = malloc(sizeof(float[N][N]));
-    float (*B)[N] = malloc(sizeof(float[N][N]));
-    float (*C_naive)[N] = malloc(sizeof(float[N][N]));
-    float (*C_scalar)[N] = malloc(sizeof(float[N][N]));
-    float (*C_vectorized)[N] = malloc(sizeof(float[N][N]));
+	float (*A)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
+    float (*B)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
+    float (*C_naive)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
+    float (*C_scalar)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
+    float (*C_vectorized)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
 
      if (A == NULL || B == NULL || C_naive == NULL || C_scalar == NULL || C_vectorized == NULL) {   
         printf("Memory allocation failed\n");
@@ -65,11 +66,11 @@ int main() {
         printf("Matrices do not match within tolerance.\n");
     }
 
-    free(A);
-    free(B);
-    free(C_naive);
-    free(C_scalar);
-    free(C_vectorized);
+	_mm_free(A);
+    _mm_free(B);
+    _mm_free(C_naive);
+    _mm_free(C_scalar);
+    _mm_free(C_vectorized);	
 
     return 0;
 }
