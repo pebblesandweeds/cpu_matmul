@@ -72,13 +72,13 @@ float sum256_ps(__m256 v) {
 }
 
 void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
-int i, j, k;
+    int i, j, k;
     __m256 sum0, sum1, sum2, sum3;
-    __m256 Aik;
+    __m256 Aik0, Aik1, Aik2, Aik3;
     float *ap_pntr, *bp0_pntr, *bp1_pntr, *bp2_pntr, *bp3_pntr;
     float A_col[N], B_col[4*N];
 
-    #pragma omp parallel for private(i, j, k, sum0, sum1, sum2, sum3, Aik, ap_pntr, bp0_pntr, bp1_pntr, bp2_pntr, bp3_pntr, A_col, B_col)
+    #pragma omp parallel for private(i, j, k, sum0, sum1, sum2, sum3, Aik0, Aik1, Aik2, Aik3, ap_pntr, bp0_pntr, bp1_pntr, bp2_pntr, bp3_pntr, A_col, B_col)
     for (j = 0; j < N; j += 4) {
         // Convert columns of B to column-major order
         for (k = 0; k < N; k++) {
@@ -88,41 +88,73 @@ int i, j, k;
             B_col[3 * N + k] = B[k][j + 3];
         }
 
-        for (i = 0; i < N; i++) {
-            // Convert row of A to column-major order
-            for (k = 0; k < N; k++) {
-                A_col[k] = A[i][k];
+        for (i = 0; i < N; i += 4) {
+            for (int ii = 0; ii < 4 && i + ii < N; ii++) {
+                // Convert row of A to column-major order
+                for (k = 0; k < N; k++) {
+                    A_col[k] = A[i+ii][k];
+                }
+
+                sum0 = _mm256_setzero_ps();
+                sum1 = _mm256_setzero_ps();
+                sum2 = _mm256_setzero_ps();
+                sum3 = _mm256_setzero_ps();
+
+                ap_pntr = A_col;
+                bp0_pntr = B_col;
+                bp1_pntr = B_col + N;
+                bp2_pntr = B_col + 2 * N;                                                                                                                                                                                                                                                                                                   bp3_pntr = B_col + 3 * N;
+
+                for (k = 0; k < N; k += 32) {
+                    Aik0 = _mm256_loadu_ps(ap_pntr);
+                    Aik1 = _mm256_loadu_ps(ap_pntr + 8);
+                    Aik2 = _mm256_loadu_ps(ap_pntr + 16);
+                    Aik3 = _mm256_loadu_ps(ap_pntr + 24);
+
+                    sum0 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp0_pntr), sum0);
+                    sum1 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp1_pntr), sum1);
+                    sum2 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp2_pntr), sum2);
+                    sum3 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp3_pntr), sum3);
+
+                    sum0 = _mm256_fmadd_ps(Aik1, _mm256_loadu_ps(bp0_pntr + 8), sum0);
+                    sum1 = _mm256_fmadd_ps(Aik1, _mm256_loadu_ps(bp1_pntr + 8), sum1);
+                    sum2 = _mm256_fmadd_ps(Aik1, _mm256_loadu_ps(bp2_pntr + 8), sum2);
+                    sum3 = _mm256_fmadd_ps(Aik1, _mm256_loadu_ps(bp3_pntr + 8), sum3);
+
+                    sum0 = _mm256_fmadd_ps(Aik2, _mm256_loadu_ps(bp0_pntr + 16), sum0);
+                    sum1 = _mm256_fmadd_ps(Aik2, _mm256_loadu_ps(bp1_pntr + 16), sum1);
+                    sum2 = _mm256_fmadd_ps(Aik2, _mm256_loadu_ps(bp2_pntr + 16), sum2);
+                    sum3 = _mm256_fmadd_ps(Aik2, _mm256_loadu_ps(bp3_pntr + 16), sum3);
+
+                    sum0 = _mm256_fmadd_ps(Aik3, _mm256_loadu_ps(bp0_pntr + 24), sum0);
+                    sum1 = _mm256_fmadd_ps(Aik3, _mm256_loadu_ps(bp1_pntr + 24), sum1);
+                    sum2 = _mm256_fmadd_ps(Aik3, _mm256_loadu_ps(bp2_pntr + 24), sum2);
+                    sum3 = _mm256_fmadd_ps(Aik3, _mm256_loadu_ps(bp3_pntr + 24), sum3);
+
+                    ap_pntr += 32;
+                    bp0_pntr += 32;
+                    bp1_pntr += 32;
+                    bp2_pntr += 32;
+                    bp3_pntr += 32;
+                }
+
+                for (; k < N; k += 8) {
+                    Aik0 = _mm256_loadu_ps(ap_pntr);                                                                                                                                                                                                                                                                                            sum0 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp0_pntr), sum0);
+                    sum1 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp1_pntr), sum1);
+                    sum2 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp2_pntr), sum2);
+                    sum3 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp3_pntr), sum3);
+                    ap_pntr += 8;
+                    bp0_pntr += 8;
+                    bp1_pntr += 8;
+                    bp2_pntr += 8;
+                    bp3_pntr += 8;
+                }
+
+                C[i+ii][j] += sum256_ps(sum0);
+                C[i+ii][j + 1] += sum256_ps(sum1);
+                C[i+ii][j + 2] += sum256_ps(sum2);
+                C[i+ii][j + 3] += sum256_ps(sum3);
             }
-
-            sum0 = _mm256_setzero_ps();
-            sum1 = _mm256_setzero_ps();
-            sum2 = _mm256_setzero_ps();
-            sum3 = _mm256_setzero_ps();
-
-            ap_pntr = A_col;
-            bp0_pntr = B_col;
-            bp1_pntr = B_col + N;
-            bp2_pntr = B_col + 2 * N;
-            bp3_pntr = B_col + 3 * N;
-
-            for (k = 0; k < N; k += 8) {
-                Aik = _mm256_loadu_ps(ap_pntr);
-                sum0 = _mm256_add_ps(sum0, _mm256_mul_ps(Aik, _mm256_loadu_ps(bp0_pntr)));
-                sum1 = _mm256_add_ps(sum1, _mm256_mul_ps(Aik, _mm256_loadu_ps(bp1_pntr)));
-                sum2 = _mm256_add_ps(sum2, _mm256_mul_ps(Aik, _mm256_loadu_ps(bp2_pntr)));
-                sum3 = _mm256_add_ps(sum3, _mm256_mul_ps(Aik, _mm256_loadu_ps(bp3_pntr)));
-
-                ap_pntr += 8;
-                bp0_pntr += 8;
-                bp1_pntr += 8;
-                bp2_pntr += 8;
-                bp3_pntr += 8;
-            }
-
-            C[i][j] += sum256_ps(sum0);
-            C[i][j + 1] += sum256_ps(sum1);
-            C[i][j + 2] += sum256_ps(sum2);
-            C[i][j + 3] += sum256_ps(sum3);
         }
     }
-}	
+}     
