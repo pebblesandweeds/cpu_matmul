@@ -2,7 +2,7 @@
 CC = gcc
 
 # Compiler flags
-CFLAGS = -fopenmp -O2 -march=native -I./include
+CFLAGS = -mavx2 -fopenmp -O2 -march=native -I./include
 
 # Executable name
 EXEC = matmul

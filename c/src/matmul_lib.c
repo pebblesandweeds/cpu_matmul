@@ -103,9 +103,11 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
                 ap_pntr = A_col;
                 bp0_pntr = B_col;
                 bp1_pntr = B_col + N;
-                bp2_pntr = B_col + 2 * N;                                                                                                                                                                                                                                                                                                   bp3_pntr = B_col + 3 * N;
+                bp2_pntr = B_col + 2 * N;
+                bp3_pntr = B_col + 3 * N;
 
                 for (k = 0; k < N; k += 32) {
+                    // Unrolled loop (4 iterations)
                     Aik0 = _mm256_loadu_ps(ap_pntr);
                     Aik1 = _mm256_loadu_ps(ap_pntr + 8);
                     Aik2 = _mm256_loadu_ps(ap_pntr + 16);
@@ -138,8 +140,10 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
                     bp3_pntr += 32;
                 }
 
+                // Handle remaining iterations if N is not divisible by 32
                 for (; k < N; k += 8) {
-                    Aik0 = _mm256_loadu_ps(ap_pntr);                                                                                                                                                                                                                                                                                            sum0 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp0_pntr), sum0);
+                    Aik0 = _mm256_loadu_ps(ap_pntr);
+                    sum0 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp0_pntr), sum0);
                     sum1 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp1_pntr), sum1);
                     sum2 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp2_pntr), sum2);
                     sum3 = _mm256_fmadd_ps(Aik0, _mm256_loadu_ps(bp3_pntr), sum3);
@@ -157,4 +161,4 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
             }
         }
     }
-}     
+}
