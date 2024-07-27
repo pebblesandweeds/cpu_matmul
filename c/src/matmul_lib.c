@@ -82,80 +82,61 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
                 }
             }
 
-            __m256 c00 = _mm256_setzero_ps();
-            __m256 c01 = _mm256_setzero_ps();
-            __m256 c02 = _mm256_setzero_ps();
-            __m256 c03 = _mm256_setzero_ps();
-            __m256 c10 = _mm256_setzero_ps();
-            __m256 c11 = _mm256_setzero_ps();
-            __m256 c12 = _mm256_setzero_ps();
-            __m256 c13 = _mm256_setzero_ps();
-            __m256 c20 = _mm256_setzero_ps();
-            __m256 c21 = _mm256_setzero_ps();
-            __m256 c22 = _mm256_setzero_ps();
-            __m256 c23 = _mm256_setzero_ps();
-            __m256 c30 = _mm256_setzero_ps();
-            __m256 c31 = _mm256_setzero_ps();
-            __m256 c32 = _mm256_setzero_ps();
-            __m256 c33 = _mm256_setzero_ps();
-
-            for (k = 0; k < N; k += 8) {
-                __m256 a0 = _mm256_loadu_ps(&A_col[0][k]);
-                __m256 a1 = _mm256_loadu_ps(&A_col[1][k]);
-                __m256 a2 = _mm256_loadu_ps(&A_col[2][k]);
-                __m256 a3 = _mm256_loadu_ps(&A_col[3][k]);
-
-                __m256 b0 = _mm256_loadu_ps(&B_col[0*N + k]);
-                __m256 b1 = _mm256_loadu_ps(&B_col[1*N + k]);
-                __m256 b2 = _mm256_loadu_ps(&B_col[2*N + k]);
-                __m256 b3 = _mm256_loadu_ps(&B_col[3*N + k]);
-
-                c00 = _mm256_fmadd_ps(a0, b0, c00);
-                c01 = _mm256_fmadd_ps(a0, b1, c01);
-                c02 = _mm256_fmadd_ps(a0, b2, c02);
-                c03 = _mm256_fmadd_ps(a0, b3, c03);
-
-                c10 = _mm256_fmadd_ps(a1, b0, c10);
-                c11 = _mm256_fmadd_ps(a1, b1, c11);
-                c12 = _mm256_fmadd_ps(a1, b2, c12);
-                c13 = _mm256_fmadd_ps(a1, b3, c13);
-
-                c20 = _mm256_fmadd_ps(a2, b0, c20);
-                c21 = _mm256_fmadd_ps(a2, b1, c21);
-                c22 = _mm256_fmadd_ps(a2, b2, c22);
-                c23 = _mm256_fmadd_ps(a2, b3, c23);
-
-                c30 = _mm256_fmadd_ps(a3, b0, c30);
-                c31 = _mm256_fmadd_ps(a3, b1, c31);
-                c32 = _mm256_fmadd_ps(a3, b2, c32);
-                c33 = _mm256_fmadd_ps(a3, b3, c33);
+            __m256 c[4][4];
+            for (int ii = 0; ii < 4; ii++) {
+                for (int jj = 0; jj < 4; jj++) {
+                    c[ii][jj] = _mm256_setzero_ps();
+                }
             }
 
-            for (int ii = 0; ii < 4 && i + ii < N; ii++) {
-                __m256 ci0, ci1, ci2, ci3;
-                if (ii == 0) {
-                    ci0 = c00; ci1 = c01; ci2 = c02; ci3 = c03;
-                } else if (ii == 1) {
-                    ci0 = c10; ci1 = c11; ci2 = c12; ci3 = c13;
-                } else if (ii == 2) {
-                    ci0 = c20; ci1 = c21; ci2 = c22; ci3 = c23;
-                } else {
-                    ci0 = c30; ci1 = c31; ci2 = c32; ci3 = c33;
+            // Main computation loop
+            for (k = 0; k < N; k += 32) {
+                __m256 a[4][4], b[4][4];
+
+                // Load A and B
+                for (int ii = 0; ii < 4; ii++) {
+                    for (int kk = 0; kk < 4; kk++) {
+                        a[ii][kk] = _mm256_loadu_ps(&A_col[ii][k + kk*8]);
+                    }
+                }
+                for (int jj = 0; jj < 4; jj++) {
+                    for (int kk = 0; kk < 4; kk++) {
+                        b[jj][kk] = _mm256_loadu_ps(&B_col[jj*N + k + kk*8]);
+                    }
                 }
 
-                for (int jj = 0; jj < 4 && j + jj < N; jj++) {
-                    __m256 cij;
-                    if (jj == 0) cij = ci0;
-                    else if (jj == 1) cij = ci1;
-                    else if (jj == 2) cij = ci2;
-                    else cij = ci3;
+                // Compute 4x4 block
+                for (int ii = 0; ii < 4; ii++) {
+                    for (int jj = 0; jj < 4; jj++) {
+                        c[ii][jj] = _mm256_fmadd_ps(a[ii][0], b[jj][0], c[ii][jj]);
+                        c[ii][jj] = _mm256_fmadd_ps(a[ii][1], b[jj][1], c[ii][jj]);
+                        c[ii][jj] = _mm256_fmadd_ps(a[ii][2], b[jj][2], c[ii][jj]);
+                        c[ii][jj] = _mm256_fmadd_ps(a[ii][3], b[jj][3], c[ii][jj]);
+                    }
+                }
+            }
 
+            // Reduce and store results back to C
+            for (int ii = 0; ii < 4 && i + ii < N; ii++) {
+                for (int jj = 0; jj < 4 && j + jj < N; jj++) {
+                    __m256 cij = c[ii][jj];
                     __m128 sum_low = _mm256_castps256_ps128(cij);
                     __m128 sum_high = _mm256_extractf128_ps(cij, 1);
                     __m128 sum = _mm_add_ps(sum_low, sum_high);
                     sum = _mm_hadd_ps(sum, sum);
                     sum = _mm_hadd_ps(sum, sum);
                     C[i+ii][j+jj] += _mm_cvtss_f32(sum);
+                }
+            }
+
+            // Handle remaining elements
+            for (int ii = 0; ii < 4 && i + ii < N; ii++) {
+                for (int jj = 0; jj < 4 && j + jj < N; jj++) {
+                    int k_rem = (N / 32) * 32;
+                    while (k_rem < N) {
+                        C[i+ii][j+jj] += A_col[ii][k_rem] * B_col[jj*N + k_rem];
+                        k_rem++;
+                    }
                 }
             }
         }
