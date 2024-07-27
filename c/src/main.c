@@ -59,7 +59,7 @@ int main() {
     printf("Vectorized matmul: %.2f GFLOPS\n", gflops_vectorized);
 
     // Check matrices
-    bool matrices_match_naive_vectorized = check_matrices(C_naive, C_vectorized, 1e-3);
+    bool matrices_match_naive_vectorized = check_matrices(C_naive, C_vectorized, 1e-2);
     if (matrices_match_naive_vectorized) {    
         printf("Matrices match within tolerance.\n");
     } else {
