@@ -16,18 +16,19 @@ This repository explores matrix multiplication on CPUs using Python/Numpy and C,
 ### Installation
 
 1. Clone the repository.
-2. Install the required Python packages using `pip install -r python/requirements.txt`.
+2. Change your directory `cd cpu_matmul`
+3. Install the required Python packages using `pip install -r python/requirements.txt`.
 
 ## Usage
 
 ### Running the Python Script
 
-Run the Python script using `python python/numpy_matmul.py` (assuming you are in the root of the repo)
+Run the Python script using `python python/numpy_matmul.py` 
 
 ### Running the C Code
 
-1. Compile the code with the Makefile using `make -C c` (assuming you are in the root of the repo)
-2. Run the code using `./c/matmul` (assuming you are in the root of the repo)
+1. Change directories `cd c`
+2. Compile and run the benchmark `make && ./matmul` 
 
 ### Common Performance Output
 
@@ -56,7 +57,7 @@ Both the Python and C scripts output the elapsed time for matrix multiplication,
 
 ## Performance Metrics
 
-The following performance metrics were achieved using the simple Python/Numpy script and C source code provided in this repository. Note that these results are preliminary and will be improved with each implementation.
+The following performance metrics were achieved using the simple Python/Numpy script and C source code provided in this repository. Note that these results are a work in progress and will be improved with each implementation.
 
 ### Python/Numpy Performance Metrics
 * 2x AMD EPYC 7713 64-Core (128 cores total): ~3000+ GFLOPS @ 32-bit precision
@@ -68,7 +69,7 @@ The following performance metrics were achieved using the simple Python/Numpy sc
 * 2x AMD EPYC 7713 64-Core (128 cores total): ~200+ GFLOPS
 
 ### Vectorized C Implementation Performance Metrics
-* 2x AMD EPYC 7713 64-Core (128 cores total): ~80+ GFLOPS
+* 2x AMD EPYC 7713 64-Core (128 cores total): ~1200+ GFLOPS
 
 ## License
 
