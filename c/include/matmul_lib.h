@@ -1,7 +1,7 @@
 #ifndef MATMUL_LIB_H
 #define MATMUL_LIB_H
 
-#define N 4096 
+#define N 8192 
 #define BLOCK_SIZE 64
 #define TILE_SIZE 32 
 #define UNROLL_FACTOR 4
