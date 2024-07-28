@@ -61,95 +61,77 @@ void matmul_scalar(float A[N][N], float B[N][N], float C[N][N]) {
 }
 
 void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
-    int i, j, k;
-    float A_col[4][N] __attribute__((aligned(32)));
-    float B_col[4][N] __attribute__((aligned(32)));
+    #pragma omp parallel
+    {
+        float A_col[8][N] __attribute__((aligned(32)));
+        float B_col[8][N] __attribute__((aligned(32)));
 
-    #pragma omp parallel for private(i, j, k, A_col, B_col)
-    for (j = 0; j < N; j += 4) {
-        // Convert columns of B to column-major order
-        for (k = 0; k < N; k++) {
-            for (int jj = 0; jj < 4 && j + jj < N; jj++) {
-                B_col[jj][k] = B[k][j + jj];
-            }
-        }
-
-        for (i = 0; i < N; i += 4) {
-            // Convert rows of A to column-major order
-            for (int ii = 0; ii < 4 && i + ii < N; ii++) {
-                float *A_col_ptr = A_col[ii];
-                for (k = 0; k < N; k++) {
-                    *A_col_ptr++ = A[i+ii][k];
+        #pragma omp for
+        for (int j = 0; j < N; j += 8) {
+            // Convert columns of B to column-major order
+            for (int k = 0; k < N; k++) {
+                for (int jj = 0; jj < 8 && j + jj < N; jj++) {
+                    B_col[jj][k] = B[k][j + jj];
                 }
             }
 
-            __m256 c[4][4];
-            for (int ii = 0; ii < 4; ii++) {
-                for (int jj = 0; jj < 4; jj++) {
-                    c[ii][jj] = _mm256_setzero_ps();
-                }
-            }
-
-            for (k = 0; k < N; k += 32) {
-                // Prefetch next A_col and B_col data
-                if (k + 128 < N) {
-                    for (int ii = 0; ii < 4; ii++) {
-                        _mm_prefetch((char*)&A_col[ii][k + 128], _MM_HINT_T1);
-                        _mm_prefetch((char*)&A_col[ii][k + 160], _MM_HINT_T1);
-                        _mm_prefetch((char*)&B_col[ii][k + 128], _MM_HINT_T1);
-                        _mm_prefetch((char*)&B_col[ii][k + 160], _MM_HINT_T1);
+            for (int i = 0; i < N; i += 8) {
+                // Convert rows of A to column-major order
+                for (int ii = 0; ii < 8 && i + ii < N; ii++) {
+                    float *A_col_ptr = A_col[ii];
+                    for (int k = 0; k < N; k++) {
+                        *A_col_ptr++ = A[i+ii][k];
                     }
                 }
 
-                // Prefetch C at the start of each 4x4 block
-                if (k == 0) {
-                    for (int ii = 0; ii < 4; ii++) {
-                        _mm_prefetch((char*)&C[i+ii][j], _MM_HINT_T0);
+                __m256 c[8][8];
+                for (int ii = 0; ii < 8; ii++) {
+                    for (int jj = 0; jj < 8; jj++) {
+                        c[ii][jj] = _mm256_setzero_ps();
                     }
                 }
 
-                __m256 a[4][4], b[4][4];
+                for (int k = 0; k < N; k += 32) {
+                    // Prefetch next A_col and B_col data
+                    if (k + 128 < N) {
+                        for (int ii = 0; ii < 8; ii++) {
+                            _mm_prefetch((char*)&A_col[ii][k + 128], _MM_HINT_T1);
+                            _mm_prefetch((char*)&B_col[ii][k + 128], _MM_HINT_T1);
+                        }
+                    }
 
-                for (int ii = 0; ii < 4; ii++) {
-                    float *A_ptr = &A_col[ii][k];
-                    float *B_ptr = &B_col[ii][k];
-                    for (int kk = 0; kk < 4; kk++) {
-                        a[ii][kk] = _mm256_load_ps(A_ptr);
-                        b[ii][kk] = _mm256_load_ps(B_ptr);
-                        A_ptr += 8;
-                        B_ptr += 8;
+                    __m256 a[8][4], b[8][4];
+                    for (int ii = 0; ii < 8; ii++) {
+                        float *A_ptr = &A_col[ii][k];
+                        float *B_ptr = &B_col[ii][k];
+                        for (int kk = 0; kk < 4; kk++) {
+                            a[ii][kk] = _mm256_load_ps(A_ptr);
+                            b[ii][kk] = _mm256_load_ps(B_ptr);
+                            A_ptr += 8;
+                            B_ptr += 8;
+                        }
+                    }
+
+                    for (int ii = 0; ii < 8; ii++) {
+                        for (int jj = 0; jj < 8; jj++) {
+                            c[ii][jj] = _mm256_fmadd_ps(a[ii][0], b[jj][0], c[ii][jj]);
+                            c[ii][jj] = _mm256_fmadd_ps(a[ii][1], b[jj][1], c[ii][jj]);
+                            c[ii][jj] = _mm256_fmadd_ps(a[ii][2], b[jj][2], c[ii][jj]);
+                            c[ii][jj] = _mm256_fmadd_ps(a[ii][3], b[jj][3], c[ii][jj]);
+                        }
                     }
                 }
 
-                for (int ii = 0; ii < 4; ii++) {
-                    for (int jj = 0; jj < 4; jj++) {
-                        c[ii][jj] = _mm256_fmadd_ps(a[ii][0], b[jj][0], c[ii][jj]);
-                        c[ii][jj] = _mm256_fmadd_ps(a[ii][1], b[jj][1], c[ii][jj]);
-                        c[ii][jj] = _mm256_fmadd_ps(a[ii][2], b[jj][2], c[ii][jj]);
-                        c[ii][jj] = _mm256_fmadd_ps(a[ii][3], b[jj][3], c[ii][jj]);
-                    }
-                }
-            }
-
-            // Reduce and store results back to C
-            for (int ii = 0; ii < 4 && i + ii < N; ii++) {
-                for (int jj = 0; jj < 4 && j + jj < N; jj++) {
-                    __m256 cij = c[ii][jj];
-                    __m128 sum_low = _mm256_castps256_ps128(cij);
-                    __m128 sum_high = _mm256_extractf128_ps(cij, 1);
-                    __m128 sum = _mm_add_ps(sum_low, sum_high);
-                    sum = _mm_hadd_ps(sum, sum);
-                    sum = _mm_hadd_ps(sum, sum);
-                    C[i+ii][j+jj] += _mm_cvtss_f32(sum);
-                }
-            }
-
-            for (int ii = 0; ii < 4 && i + ii < N; ii++) {
-                for (int jj = 0; jj < 4 && j + jj < N; jj++) {
-                    int k_rem = (N / 32) * 32;
-                    while (k_rem < N) {
-                        C[i+ii][j+jj] += A_col[ii][k_rem] * B_col[jj][k_rem];
-                        k_rem++;
+                // Reduce and store results back to C
+                for (int ii = 0; ii < 8 && i + ii < N; ii++) {
+                    for (int jj = 0; jj < 8 && j + jj < N; jj++) {
+                        __m256 cij = c[ii][jj];
+                        __m128 sum_low = _mm256_castps256_ps128(cij);
+                        __m128 sum_high = _mm256_extractf128_ps(cij, 1);
+                        __m128 sum = _mm_add_ps(sum_low, sum_high);
+                        sum = _mm_hadd_ps(sum, sum);
+                        sum = _mm_hadd_ps(sum, sum);
+                        C[i+ii][j+jj] += _mm_cvtss_f32(sum);
                     }
                 }
             }
