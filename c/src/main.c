@@ -8,7 +8,7 @@
 #include "../include/check_utils.h"
 
 int main() {
-	float (*A)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
+    float (*A)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
     float (*B)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
     float (*C_naive)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
     float (*C_scalar)[N] = (float(*)[N])_mm_malloc(sizeof(float[N][N]), 32);
