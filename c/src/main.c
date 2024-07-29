@@ -66,7 +66,7 @@ int main() {
         printf("Matrices do not match within tolerance.\n");
     }
 
-	_mm_free(A);
+    _mm_free(A);
     _mm_free(B);
     _mm_free(C_naive);
     _mm_free(C_scalar);
