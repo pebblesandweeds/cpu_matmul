@@ -61,57 +61,45 @@ void matmul_scalar(float A[N][N], float B[N][N], float C[N][N]) {
 }
 
 void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
+    float (*B_col)[N] = aligned_alloc(32, N * N * sizeof(float));
+    if (B_col == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    #pragma omp parallel for collapse(2)
+    for (int j = 0; j < N; j += 8) {
+        for (int k = 0; k < N; k++) {
+            for (int jj = 0; jj < 8 && j + jj < N; jj++) {
+                B_col[j+jj][k] = B[k][j+jj];
+            }
+        }
+    }
     #pragma omp parallel
     {
-        float A_col[8][N] __attribute__((aligned(32)));
-        float B_col[8][N] __attribute__((aligned(32)));
-
         #pragma omp for
         for (int j = 0; j < N; j += 8) {
-            // Convert columns of B to column-major order
-            for (int k = 0; k < N; k++) {
-                for (int jj = 0; jj < 8 && j + jj < N; jj++) {
-                    B_col[jj][k] = B[k][j + jj];
-                }
-            }
-
             for (int i = 0; i < N; i += 8) {
-                // Convert rows of A to column-major order
-                for (int ii = 0; ii < 8 && i + ii < N; ii++) {
-                    float *A_col_ptr = A_col[ii];
-                    for (int k = 0; k < N; k++) {
-                        *A_col_ptr++ = A[i+ii][k];
-                    }
-                }
-
                 __m256 c[8][8];
                 for (int ii = 0; ii < 8; ii++) {
                     for (int jj = 0; jj < 8; jj++) {
                         c[ii][jj] = _mm256_setzero_ps();
                     }
                 }
-
                 for (int k = 0; k < N; k += 32) {
-                    // Prefetch next A_col and B_col data
+                    // Prefetch next A and B_col data
                     if (k + 128 < N) {
                         for (int ii = 0; ii < 8; ii++) {
-                            _mm_prefetch((char*)&A_col[ii][k + 128], _MM_HINT_T1);
-                            _mm_prefetch((char*)&B_col[ii][k + 128], _MM_HINT_T1);
+                            _mm_prefetch((char*)&A[i+ii][k + 128], _MM_HINT_T1);
+                            _mm_prefetch((char*)&B_col[j+ii][k + 128], _MM_HINT_T1);
                         }
                     }
-
                     __m256 a[8][4], b[8][4];
                     for (int ii = 0; ii < 8; ii++) {
-                        float *A_ptr = &A_col[ii][k];
-                        float *B_ptr = &B_col[ii][k];
                         for (int kk = 0; kk < 4; kk++) {
-                            a[ii][kk] = _mm256_load_ps(A_ptr);
-                            b[ii][kk] = _mm256_load_ps(B_ptr);
-                            A_ptr += 8;
-                            B_ptr += 8;
+                            a[ii][kk] = _mm256_loadu_ps(&A[i+ii][k+kk*8]);
+                            b[ii][kk] = _mm256_load_ps(&B_col[j+ii][k+kk*8]);
                         }
                     }
-
                     for (int ii = 0; ii < 8; ii++) {
                         for (int jj = 0; jj < 8; jj++) {
                             c[ii][jj] = _mm256_fmadd_ps(a[ii][0], b[jj][0], c[ii][jj]);
@@ -121,8 +109,6 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
                         }
                     }
                 }
-
-                // Reduce and store results back to C
                 for (int ii = 0; ii < 8 && i + ii < N; ii++) {
                     for (int jj = 0; jj < 8 && j + jj < N; jj++) {
                         __m256 cij = c[ii][jj];
@@ -137,4 +123,5 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
             }
         }
     }
+    free(B_col);
 }
