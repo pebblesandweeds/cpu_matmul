@@ -3,6 +3,7 @@
 #include <omp.h>
 #include <math.h>
 #include <immintrin.h>
+#include <stdio.h>
 
 // Similar to Numpy but this function will generate a uniform distribution between -1 and 1
 // However, Numpy + Python will generate a normal distribution (bell curve centered at 0) while this function will not
