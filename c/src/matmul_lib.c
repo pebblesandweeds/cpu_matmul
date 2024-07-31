@@ -68,9 +68,9 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
         exit(1);
     }
     #pragma omp parallel for collapse(2)
-    for (int j = 0; j < N; j += 16) {
+    for (int j = 0; j < N; j += 32) {
         for (int k = 0; k < N; k++) {
-            for (int jj = 0; jj < 16 && j + jj < N; jj++) {
+            for (int jj = 0; jj < 32 && j + jj < N; jj++) {
                 B_col[j+jj][k] = B[k][j+jj];
             }
         }
@@ -78,30 +78,30 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
     #pragma omp parallel
     {
         #pragma omp for
-        for (int j = 0; j < N; j += 16) {
-            for (int i = 0; i < N; i += 16) {
-                __m256 c[16][16];
-                for (int ii = 0; ii < 16; ii++) {
-                    for (int jj = 0; jj < 16; jj++) {
+        for (int j = 0; j < N; j += 32) {
+            for (int i = 0; i < N; i += 32) {
+                __m256 c[32][32];
+                for (int ii = 0; ii < 32; ii++) {
+                    for (int jj = 0; jj < 32; jj++) {
                         c[ii][jj] = _mm256_setzero_ps();
                     }
                 }
                 for (int k = 0; k < N; k += 32) {
                     if (k + 128 < N) {
-                        for (int ii = 0; ii < 16; ii++) {
+                        for (int ii = 0; ii < 32; ii++) {
                             _mm_prefetch((char*)&A[i+ii][k + 128], _MM_HINT_T1);
                             _mm_prefetch((char*)&B_col[j+ii][k + 128], _MM_HINT_T1);
                         }
                     }
-                    __m256 a[16][4], b[16][4];
-                    for (int ii = 0; ii < 16; ii++) {
+                    __m256 a[32][4], b[32][4];
+                    for (int ii = 0; ii < 32; ii++) {
                         for (int kk = 0; kk < 4; kk++) {
                             a[ii][kk] = _mm256_loadu_ps(&A[i+ii][k+kk*8]);
                             b[ii][kk] = _mm256_load_ps(&B_col[j+ii][k+kk*8]);
                         }
                     }
-                    for (int ii = 0; ii < 16; ii++) {
-                        for (int jj = 0; jj < 16; jj++) {
+                    for (int ii = 0; ii < 32; ii++) {
+                        for (int jj = 0; jj < 32; jj++) {
                             c[ii][jj] = _mm256_fmadd_ps(a[ii][0], b[jj][0], c[ii][jj]);
                             c[ii][jj] = _mm256_fmadd_ps(a[ii][1], b[jj][1], c[ii][jj]);
                             c[ii][jj] = _mm256_fmadd_ps(a[ii][2], b[jj][2], c[ii][jj]);
@@ -109,8 +109,8 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
                         }
                     }
                 }
-                for (int ii = 0; ii < 16 && i + ii < N; ii++) {
-                    for (int jj = 0; jj < 16 && j + jj < N; jj++) {
+                for (int ii = 0; ii < 32 && i + ii < N; ii++) {
+                    for (int jj = 0; jj < 32 && j + jj < N; jj++) {
                         __m256 cij = c[ii][jj];
                         __m128 sum_low = _mm256_castps256_ps128(cij);
                         __m128 sum_high = _mm256_extractf128_ps(cij, 1);
