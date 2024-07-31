@@ -111,13 +111,14 @@ void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
                 }
                 for (int ii = 0; ii < 32 && i + ii < N; ii++) {
                     for (int jj = 0; jj < 32 && j + jj < N; jj++) {
-                        __m256 cij = c[ii][jj];
-                        __m128 sum_low = _mm256_castps256_ps128(cij);
-                        __m128 sum_high = _mm256_extractf128_ps(cij, 1);
-                        __m128 sum = _mm_add_ps(sum_low, sum_high);
-                        sum = _mm_hadd_ps(sum, sum);
-                        sum = _mm_hadd_ps(sum, sum);
-                        C[i+ii][j+jj] += _mm_cvtss_f32(sum);
+                        __m256 sum = c[ii][jj];
+                        __m128 sum_high = _mm256_extractf128_ps(sum, 1);
+                        __m128 sum_low = _mm256_castps256_ps128(sum);
+                        __m128 sum_all = _mm_add_ps(sum_high, sum_low);
+                        sum_all = _mm_hadd_ps(sum_all, sum_all);
+                        sum_all = _mm_hadd_ps(sum_all, sum_all);
+                        float result = _mm_cvtss_f32(sum_all);
+                        C[i+ii][j+jj] += result;
                     }
                 }
             }
