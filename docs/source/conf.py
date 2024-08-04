@@ -25,4 +25,15 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'alabaster'
+
+html_theme_options = {
+    'logo': 'pebblesandweeds.png',  # Reference your logo
+    'github_user': 'pebblesandweeds',
+    'github_repo': 'cpu_matmul',
+    'description': 'A detailed guide to CPU Matrix Multiplication in C',
+    'show_powered_by': False,
+    'show_related': False,
+    'note_bg': '#FFF59C',
+}
+
 html_static_path = ['_static']
