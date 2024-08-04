@@ -60,16 +60,16 @@ Both the Python and C scripts output the elapsed time for matrix multiplication,
 The following performance metrics were achieved using the simple Python/Numpy script and C source code provided in this repository. Note that these results are a work in progress and will be improved with each implementation.
 
 ### Python/Numpy Performance Metrics
-* 2x AMD EPYC 7713 64-Core (128 cores total): ~3000+ GFLOPS @ 32-bit precision
+* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~3500+ GFLOPS @ 32-bit precision
 
 ### Naive C Implementation Performance Metrics
-* 2x AMD EPYC 7713 64-Core (128 cores total): ~15+ GFLOPS
+* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~25+ GFLOPS
 
 ### Optimized scalar C Implementation Performance Metrics
-* 2x AMD EPYC 7713 64-Core (128 cores total): ~200+ GFLOPS
+* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~270+ GFLOPS
 
 ### Vectorized C Implementation Performance Metrics
-* 2x AMD EPYC 7713 64-Core (128 cores total): ~1200+ GFLOPS
+* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~2700+ GFLOPS
 
 ## License
 
