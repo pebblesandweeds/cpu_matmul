@@ -36,37 +36,11 @@ Additionally, using a power of 2 like 8192 aligns with optimal memory access pat
 Matrix Multiplication Flow
 ==========================
 
-The following diagram illustrates how matrix \( A \) is multiplied by matrix \( B \) to form matrix \( C \) using the naive matrix multiplication approach.
+The following diagram illustrates how matrix :math:`A` is multiplied by matrix :math:`B` to form matrix :math:`C` using the naive matrix multiplication approach.
 
-.. plantuml::
-
-    @startuml
-
-    package "Matrix A" {
-        [A11]
-        [A12]
-        [A1N]
-        [AN1]
-        [ANN]
-    }
-
-    package "Matrix B" {
-        [B11]
-        [B12]
-        [B1N]
-        [BN1]
-        [BNN]
-    }
-
-    package "Matrix C" {
-        [C11]
-        [C12]
-        [C1N]
-        [CN1]
-        [CNN]
-    }
-
-    @enduml
+.. image:: /_static/matrix_multiplication_8x8_precise_loop.gif
+   :alt: 8x8 Matrix Multiplication Animation
+   :align: center
 
 Explanation
 -----------
