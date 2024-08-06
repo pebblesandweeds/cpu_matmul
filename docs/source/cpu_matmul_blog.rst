@@ -29,19 +29,21 @@ Matrix multiplication plays a critical role in the training process of these mod
 
 These factors highlight why matrix multiplication is vital, even in older models like GPT-2 and GPT-3, underpinning their capacity to process and generate language efficiently. Understanding and optimizing matrix multiplication is essential for handling the extensive computations required by these and other machine learning models.
 
-Why Start with CPUs?
---------------------
+Why Start with CPUs? Why Use C?
+-------------------------------
 
-While GPUs are the go-to for high-performance matrix operations, learning how to implement these operations on CPUs is a great way to build foundational knowledge. By starting on a CPU, you can understand the mechanics of matrix multiplication and optimization techniques at a granular level.
+While GPUs are the preferred choice for high-performance matrix operations, we're starting with CPUs to build a solid foundation in matrix multiplication and optimization techniques. By implementing matrix operations on a CPU, we can gain a deeper understanding of the underlying mechanics and develop a more nuanced appreciation for the challenges of optimizing performance.
 
-The benchmark for optimal performance on a CPU is often set by Python's NumPy library. Our goal is to develop an understanding of matrix multiplication by implementing it in C and striving to reach the performance levels of NumPy.
+We're also choosing to implement matrix multiplication in C, rather than a higher-level language, for several reasons. Firstly, C provides direct access to hardware resources, allowing us to optimize performance at a granular level. Secondly, by working in C, we can develop a more intimate understanding of the memory hierarchy and how to optimize memory access patterns, which is critical for achieving high performance in matrix operations. Finally, by comparing our C implementation to the highly optimized NumPy library in Python, we can set a benchmark for optimal performance and measure our progress. By starting with CPUs and C, we'll gain a solid foundation in matrix multiplication and optimization techniques that will serve us well as we move on to more advanced topics.
 
-Benchmarking with Large Matrices
---------------------------------
+Matrix Configuration and Benchmarking 
+-------------------------------------
 
-To effectively benchmark and compare performance, we use a large matrix size of N = 8192. Using a large N helps in observing consistent performance characteristics and avoiding anomalies that can occur with smaller matrices. Small matrices may fit entirely within the CPU cache, leading to performance variations that don't scale to larger, real-world applications.
+To establish a solid foundation for our matrix multiplication implementation, we've made several key decisions about the matrix configuration. Firstly, we're using square matrices (N x N) for both A and B, where N is the number of rows and columns. This simplifies our implementation and allows us to focus on the core matrix multiplication algorithm. While this may not be the most general case, it's a common scenario in many applications, and we can easily extend our implementation to support non-square matrices in the future.
 
-Additionally, using a power of 2 like 8192 aligns with optimal memory access patterns on many systems.
+We're also keeping N as a static value, which will be set to a large constant (8192) for our benchmarking purposes. By defining N as a constant, we can take advantage of the compiler's optimization capabilities, which may be able to perform more aggressive optimizations knowing that the value of N is fixed. In C, we can define N as a const to indicate that its value will not change at runtime.
+
+For our benchmarking, we've chosen a large value of N = 8192 to ensure that our matrices are sufficiently large to exhibit consistent performance characteristics. This helps us avoid anomalies that can occur with smaller matrices, which may fit entirely within the CPU cache. Additionally, using a power of 2 like 8192 aligns with optimal memory access patterns on many systems, making it an ideal choice for benchmarking.
 
 Matrix Multiplication Flow
 --------------------------
