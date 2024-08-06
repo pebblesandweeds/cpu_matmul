@@ -21,9 +21,13 @@ This blog discusses implementing matrix multiplication from scratch in C, emphas
 Why is Matrix Multiplication Important?
 ---------------------------------------
 
-Matrix multiplication is used extensively in the operations that underlie deep learning, such as the dot products in neural network layers. Without a solid grasp of matrix multiplication, it becomes challenging to understand and optimize these complex models.
+Matrix multiplication is central to the training and inference processes in a wide range of machine learning models, including those used in natural language processing, computer vision, and audio processing. It is the core computational operation used to transform input data, compute activations, and update model parameters. In transformer architectures, matrix multiplication is crucial for the self-attention mechanisms and feedforward neural networks that drive the models' ability to analyze and generate complex data.
 
-Most matrix operations in deep learning are performed on GPUs for efficiency, but it's crucial to understand the basics by starting with CPUs. Once you've mastered matrix multiplication on CPUs, you can transition to optimizing it on GPUs.
+Models like GPT-2 and GPT-3 rely heavily on matrix multiplication within their transformer architectures, which feature multiple layers, attention heads, and parallel processing capabilities. These models come in various configurations, with different numbers of parameters and layers, ranging from small to large (e.g., GPT-2: 1.5 billion parameters, GPT-3: up to 175 billion parameters). As model size increases, so does the number of matrix multiplications required to compute attention scores, transform data, and update weights across layers. This scalability enables complex tasks, but also underscores the need for efficient matrix operations to manage the significant computational demands of large-scale models.
+
+Matrix multiplication plays a critical role in the training process of these models. With millions of operations performed across batches and epochs, the computational cost of these operations represents a significant portion of the total training cost. Each training step involves both forward passes, where predictions are calculated, and backward passes, where gradients are computed, with matrix multiplications playing a key role in propagating information through the network. Optimizing these operations is essential for reducing training time and resource consumption, making it a key area of focus for improving the efficiency of large-scale machine learning models.
+
+These factors highlight why matrix multiplication is vital, even in older models like GPT-2 and GPT-3, underpinning their capacity to process and generate language efficiently. Understanding and optimizing matrix multiplication is essential for handling the extensive computations required by these and other machine learning models.
 
 Why Start with CPUs?
 --------------------
