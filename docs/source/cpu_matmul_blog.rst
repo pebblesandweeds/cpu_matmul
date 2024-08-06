@@ -45,37 +45,29 @@ We're also keeping N as a static value, which will be set to a large constant (8
 
 For our benchmarking, we've chosen a large value of N = 8192 to ensure that our matrices are sufficiently large to exhibit consistent performance characteristics. This helps us avoid anomalies that can occur with smaller matrices, which may fit entirely within the CPU cache. Additionally, using a power of 2 like 8192 aligns with optimal memory access patterns on many systems, making it an ideal choice for benchmarking.
 
-Matrix Multiplication Flow
---------------------------
+Naive Matrix Multiplication 
+---------------------------
 
-The following diagram illustrates how matrix :math:`A` is multiplied by matrix :math:`B` to form matrix :math:`C` using the naive matrix multiplication approach.
+The following formula and diagram illustrates how matrix :math:`A` is multiplied by matrix :math:`B` to form matrix :math:`C` using a naive matrix multiplication approach.
+
+.. centered::
+    **Matrix Multiplication Visualized**
 
 .. image:: /_static/matrix_multiplication_8x8_precise_loop.gif
    :alt: 8x8 Matrix Multiplication Animation
    :align: center
 
-Explanation
------------
+.. centered:: 
+   **Formula**
 
-In this diagram, the rows of matrix \( A \) are multiplied by the columns of matrix \( B \), resulting in the elements of matrix \( C \). Each element of matrix \( C \) is the dot product of a row from matrix \( A \) and a column from matrix \( B \).
-
-
-Naive Matrix Multiplication in C
---------------------------------
+.. math::
+    C_{ij} = \sum_{k=1}^{N} A_{ik} B_{kj}
 
 Our first implementation is a naive matrix multiplication approach, which is straightforward but not optimized for performance. The code below demonstrates this basic method:
 
 .. code-block:: c
 
-   #include "../include/matmul_lib.h"
-   #include <stdlib.h>
-   #include <omp.h>
-   #include <math.h>
-   #include <immintrin.h>
-   #include <stdio.h>
-
    void matmul(float A[N][N], float B[N][N], float C[N][N]) {
-       #pragma omp parallel for collapse(2)
        for (int i = 0; i < N; i++) {
            for (int j = 0; j < N; j++) {
                for (int k = 0; k < N; k++) {
