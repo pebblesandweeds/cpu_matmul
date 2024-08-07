@@ -45,28 +45,17 @@ To establish a solid foundation for our matrix multiplication implementation, we
 Matrix Configuration
 ^^^^^^^^^^^^^^^^^^^^
 
-- **Square Matrices (N x N)**: 
+Our implementation uses square matrices (N x N) for both matrices A and B. This choice simplifies the implementation by focusing on the core matrix multiplication algorithm. While common, it also allows for future extensions to support non-square matrices.
 
-  - **Rationale**: Simplifies the implementation and focuses on the core matrix multiplication algorithm.
-
-  - **Flexibility**: While this approach is common, it allows for future extension to non-square matrices.
-
-- **Static Size (N = 8192)**:
-
-  - **Compiler Optimization**: Defining N as a constant enables the compiler to optimize aggressively.
-
-  - **Code Implementation**: In C, we define N as a `const` to prevent changes at runtime.
+We have set N to a static size of 8192. Defining N as a constant enables more aggressive compiler optimizations, and in C, we define N as a `const` to ensure its value remains unchanged at runtime. This static size helps standardize our approach and aligns with optimal memory access patterns, making it ideal for performance benchmarking.
 
 Benchmarking Strategy
 ^^^^^^^^^^^^^^^^^^^^^
 
-- **Large Matrix Size (N = 8192)**:
+We use a large matrix size of N = 8192 to ensure that our benchmarking reflects realistic performance characteristics. This size is chosen to avoid anomalies that occur when smaller matrices fit entirely within the CPU cache, thus giving a clearer picture of performance under typical conditions. With N set to 8192 and using float32 data types, the memory requirement for a single matrix is approximately 268 MB, resulting in a total of around 804 MB for three matrices (A, B, and C).
 
-  - **Avoid Cache Anomalies**: Large matrices help avoid performance anomalies that can occur with smaller matrices fitting entirely within the CPU cache.
+For performance testing, we utilize an AWS c7a.32xlarge instance, which provides the necessary computational resources to handle large matrix operations. This instance features an AMD EPYC 9R14 processor with 2 sockets, 64 cores per socket, and a total of 128 cores, all without simultaneous multithreading (SMT). While this is a very large instance, its capacity is essential for managing the high demands of our large N value and obtaining accurate performance metrics.
 
-  - **Optimal Memory Access**: Using a power of 2, like 8192, aligns with optimal memory access patterns on many systems, making it ideal for benchmarking.
-
-This configuration and benchmarking approach allows us to measure performance effectively and prepare for future enhancements.
 
 Naive Matrix Multiplication 
 ---------------------------
@@ -104,7 +93,10 @@ Following this formula, our C code implementation employs three nested loops to 
        }
    }
 
-This naive approach highlights the direct relationship between the algorithmic simplicity and the computational inefficiency, providing a clear starting point for subsequent optimizations and deeper understanding of matrix multiplication on CPUs using C.
+Naive Matrix Multiplication Performance 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This naive approach effectively illustrates the link between algorithmic simplicity and computational inefficiency. With N set to 8192, the computation involves approximately 1,099.51 billion floating-point operations. Despite the large workload, our AWS c7a.32xlarge instance achieves a performance of around 25 GFLOPS. This demonstrates the significant gap between the naive method's potential and the optimizations needed to harness the full computational power of our hardware. This setup provides a clear starting point for exploring more advanced optimization techniques in subsequent sections.
 
 Optimizing Matrix Multiplication
 --------------------------------
@@ -112,7 +104,7 @@ Optimizing Matrix Multiplication
 To improve performance, we employ techniques such as tiling, blocking, and vectorization. These techniques help make better use of the CPU cache and parallel processing capabilities.
 
 Tiling and Blocking
-~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^
 
 Tiling and blocking break down the matrices into smaller submatrices (tiles) and process them to reduce cache misses and improve data locality. Here's how we apply these techniques in our optimized matrix multiplication function:
 
