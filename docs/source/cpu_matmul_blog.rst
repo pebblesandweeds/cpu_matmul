@@ -42,15 +42,15 @@ Matrix Configuration and Benchmarking
 
 To establish a solid foundation for our matrix multiplication implementation, we have made several key decisions regarding matrix configuration and benchmarking:
 
-Matrix Configuration
-^^^^^^^^^^^^^^^^^^^^
+*Matrix Configuration*
+^^^^^^^^^^^^^^^^^^^^^^
 
 Our implementation uses square matrices (N x N) for both matrices A and B. This choice simplifies the implementation by focusing on the core matrix multiplication algorithm. While common, it also allows for future extensions to support non-square matrices.
 
 We have set N to a static size of 8192. Defining N as a constant enables more aggressive compiler optimizations, and in C, we define N as a `const` to ensure its value remains unchanged at runtime. This static size helps standardize our approach and aligns with optimal memory access patterns, making it ideal for performance benchmarking.
 
-Benchmarking Strategy
-^^^^^^^^^^^^^^^^^^^^^
+*Benchmarking Strategy*
+^^^^^^^^^^^^^^^^^^^^^^^
 
 We use a large matrix size of N = 8192 to ensure that our benchmarking reflects realistic performance characteristics. This size is chosen to avoid anomalies that occur when smaller matrices fit entirely within the CPU cache, thus giving a clearer picture of performance under typical conditions. With N set to 8192 and using float32 data types, the memory requirement for a single matrix is approximately 268 MB, resulting in a total of around 804 MB for three matrices (A, B, and C).
 
@@ -62,8 +62,8 @@ Naive Matrix Multiplication
 
 To begin our exploration, we start with a naive matrix multiplication approach using C, which is visualized and detailed through both a mathematical formula and a straightforward implementation. This initial method, while simple, serves as a foundation for understanding the inefficiencies that come with straightforward algorithmic approaches.
 
-Visual and Formulaic Representation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*Visual and Formulaic Representation*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The process is visually demonstrated in the following animation, which shows an 8x8 matrix multiplication. Each frame captures the computation of the elements in matrix :math:`C` as the sum of products of corresponding elements in matrices :math:`A` and :math:`B`.
 
@@ -76,8 +76,8 @@ The corresponding mathematical operation is succinctly described by the formula:
 .. math::
     C_{ij} = \sum_{k=1}^{N} A_{ik} B_{kj}
 
-Naive Implementation in C
-^^^^^^^^^^^^^^^^^^^^^^^^^
+*Naive Implementation in C*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Following this formula, our C code implementation employs three nested loops to perform the matrix multiplication. This basic method is straightforward but not optimized for performance, particularly with large matrices where the computational overhead becomes significant.
 
@@ -93,8 +93,8 @@ Following this formula, our C code implementation employs three nested loops to 
        }
    }
 
-Naive Matrix Multiplication Performance 
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*Naive Matrix Multiplication Performance* 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This naive approach effectively illustrates the link between algorithmic simplicity and computational inefficiency. With N set to 8192, the computation involves approximately 1,099.51 billion floating-point operations. Despite the large workload, our AWS c7a.32xlarge instance achieves a performance of around 25 GFLOPS. This demonstrates the significant gap between the naive method's potential and the optimizations needed to harness the full computational power of our hardware. This setup provides a clear starting point for exploring more advanced optimization techniques in subsequent sections.
 
