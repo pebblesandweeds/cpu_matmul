@@ -1,13 +1,22 @@
 .. _matrix-multiplication:
 
-CPU Matrix Multiplication: A Deep Dive
-======================================
+CPU Matrix Multiplication from Scratch in C
+===========================================
 
-.. admonition:: Overview
+.. admonition:: Highlights 
 
- Matrix multiplication is fundamental in deep learning, enabling complex computations in neural networks. This blog post explores matrix multiplication using C to achieve performance comparable to Python's NumPy, delving into detailed optimizations that leverage C's low-level capabilities.
+ Matrix multiplication is fundamental in deep learning, enabling computations for neural networks. This blog post explores matrix multiplication using C to achieve performance comparable to Python's NumPy, exploring detailed optimizations that leverage C's low-level capabilities.
 
- Through a series of implementations, we demonstrate the performance evolution from a naive approach achieving ~25 GFLOPS to optimized techniques reaching ~270+ GFLOPS, and further to vectorized operations that deliver ~2700+ GFLOPS on an AWS c7a.32xlarge instance. These results highlight the effectiveness of leveraging C for high-performance matrix operations, providing a robust foundation for further exploration in high-performance computing.
+ We demonstrate the performance evolution on an AWS *c7a.32xlarge* EC2 instance through the following implementations using 32-bit precision:
+
+ - **Baseline with Python/NumPy**: **~3500 GFLOPS**, using `this implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/python/numpy_matmul.py>`_ for comparison.
+ - **Naive C Approach**: **~25 GFLOPS**, starting with a simple `scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L28>`_.
+ - **Optimized C Techniques**: **~250 GFLOPS**, optimizing the `scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L39>`_ using tiling, blocking, and loop unrolling.
+ - **Vectorized C Operations**: **~2500 GFLOPS**, leveraging `vectorized SIMD instructions <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64>`_ for enhanced performance.
+
+ These results demonstrate the effectiveness of implementing matrix multiplication from scratch in C, achieving performance levels close to those of Python's NumPy.
+
+ Get the code here -> `cpu_matmul repository <https://github.com/pebblesandweeds/cpu_matmul>`_.
 
 Introduction
 ------------

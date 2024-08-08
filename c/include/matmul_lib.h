@@ -5,7 +5,6 @@
 #define BLOCK_SIZE 64
 #define TILE_SIZE 32 
 #define UNROLL_FACTOR 4
-#define TILE_DIM 256
 
 void init_matrix(float matrix[N][N]);
 void matmul(float A[N][N], float B[N][N], float C[N][N]);
