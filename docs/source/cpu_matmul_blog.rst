@@ -7,6 +7,8 @@ CPU Matrix Multiplication: A Deep Dive
 
  Matrix multiplication is fundamental in deep learning, enabling complex computations in neural networks. This blog post explores matrix multiplication using C to achieve performance comparable to Python's NumPy, delving into detailed optimizations that leverage C's low-level capabilities.
 
+ Through a series of implementations, we demonstrate the performance evolution from a naive approach achieving ~25 GFLOPS to optimized techniques reaching ~270+ GFLOPS, and further to vectorized operations that deliver ~2700+ GFLOPS on an AWS c7a.32xlarge instance. These results highlight the effectiveness of leveraging C for high-performance matrix operations, providing a robust foundation for further exploration in high-performance computing.
+
 Introduction
 ------------
 
@@ -239,6 +241,13 @@ Below is the C implementation of matrix multiplication using vectorization techn
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The vectorized implementation significantly enhances performance by taking full advantage of CPU capabilities. On the AWS c7a.32xlarge instance, this approach achieves approximately **2700+ GFLOPS**, representing a 10x performance increase over the previously optimized matrix multiplication. This demonstrates the power of vectorized operations in maximizing computational efficiency and speed in large-scale matrix operations.
+
+Conclusion
+----------
+
+This exploration of matrix multiplication demonstrates the substantial gains possible through strategic optimizations in C. By transitioning from a naive implementation to a highly optimized vectorized approach, we achieved a 100x improvement in performance. These results underscore the importance of understanding and applying advanced techniques such as tiling, blocking, and SIMD vectorization.
+
+The journey through these optimizations highlights the potential of C in unlocking the full computational capabilities of modern hardware. As machine learning models grow increasingly complex, mastering these techniques becomes crucial for developing efficient and scalable solutions. This foundational work provides a stepping stone for future explorations into more sophisticated algorithms and hardware accelerations.
 
 References
 ----------
