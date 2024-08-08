@@ -11,7 +11,7 @@ CPU Matrix Multiplication from Scratch in C
 
  - **Baseline with Python/NumPy**: **~3500 GFLOPS**, using `this implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/python/numpy_matmul.py>`_ for comparison.
  - **Naive C Approach**: **~25 GFLOPS**, starting with a simple `scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L28>`_.
- - **Optimized C Techniques**: **~250 GFLOPS**, optimizing the `scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L39>`_ using tiling, blocking, and loop unrolling.
+ - **Optimized C Techniques**: **~250 GFLOPS**, optimizing the `naive scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L39>`_ using tiling, blocking, and loop unrolling.
  - **Vectorized C Operations**: **~2500 GFLOPS**, leveraging `vectorized SIMD instructions <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64>`_ for enhanced performance.
 
  These results demonstrate the effectiveness of implementing matrix multiplication from scratch in C, achieving performance levels close to those of Python's NumPy.
@@ -21,13 +21,9 @@ CPU Matrix Multiplication from Scratch in C
 Introduction
 ------------
 
-Matrix multiplication is at the heart of modern computational models, serving as a critical component in deep learning systems. It is integral to neural networks, where it drives activations and the flow of information through network layers, enabling these models to both "learn" and make predictions.
+Matrix multiplication is fundamental to modern computational models, particularly in deep learning and neural networks. Forward and backward propagation in neural networks use matrix multiplication to compute activations and gradients millions of times during model training and inference, allowing models to recognized patterns and make predictions. 
 
-In machine learning, especially within neural networks and transformer architectures crucial for natural language processing, matrix multiplication is fundamental. It allows for efficient data handling and transformation, which are essential for training and deploying sophisticated models.
-
-Using a low-level language like C to implement matrix multiplication from scratch can offer valuable insights into its operational mechanics. This approach helps in understanding and optimizing performance at a granular level, which is often obscured by high-level libraries like NumPy.
-
-This blog is dedicated to discussing matrix multiplication implemented in C, emphasizing the development of efficient algorithms and optimization techniques that enhance performance and understanding beyond typical high-level implementations.
+This blog explores building C implementations of CPU matrix multiplication, focusing on efficient algorithms and low-level optimizations. By working with C, we gain insights into performance enhancements often hidden by high-level libraries, critical for scaling matrix multiplication calculations for transformer based models to handle large volumes of computations.  
 
 
 Why is Matrix Multiplication Important?
