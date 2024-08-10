@@ -11,8 +11,8 @@ CPU Matrix Multiplication from Scratch in C
 
  - **Baseline with Python/NumPy**: **~3500 GFLOPS**, using `this implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/python/numpy_matmul.py>`_ for comparison with our C code.
  - **Naive C Approach**: **~25 GFLOPS**, starting with a simple `scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L28>`_.
- - **Optimized C Techniques**: **~250 GFLOPS**, optimizing the `naive scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L39>`_ using tiling, blocking, and loop unrolling.
- - **Vectorized C Operations**: **~2500 GFLOPS**, leveraging `vectorized SIMD instructions <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64>`_ for enhanced performance.
+ - **Optimized C Techniques**: **~500 GFLOPS**, optimizing the `naive scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L39>`_ using tiling, blocking, and loop unrolling.
+ - **Vectorized C Operations**: **~3000 GFLOPS**, leveraging `vectorized SIMD instructions <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64>`_ for enhanced performance.
 
  These results demonstrate the effectiveness of implementing matrix multiplication from scratch in C, achieving performance levels close to those of Python's NumPy.
 
@@ -40,9 +40,9 @@ Optimizing matrix multiplication is therefore critical for improving the efficie
 Why Matrix Multiplication on CPUs and in C?
 -------------------------------------------
 
-While GPUs are preferred for high-performance matrix operations, we start here with CPUs to establish a strong foundation in matrix multiplication and optimization techniques. Implementing matrix operations on CPUs first helps us understand the mechanics and challenges of performance optimization that are applicable to both CPU and GPU implementations:.
+While GPUs are preferred for high-performance matrix operations, we start here with CPUs to establish a strong foundation in matrix multiplication and optimization techniques. Implementing matrix operations on CPUs first helps us understand the mechanics and challenges of performance optimization that are applicable to both CPU and GPU implementations.
 
-We choose C over higher-level languages for several reasons. C provides direct access to hardware resources, enabling granular performance optimization. It also allows us to better understand the memory hierarchy and optimize access patterns, which is crucial for high-performance matrix operations. By comparing our C implementation to Python’s NumPy, we can benchmark performance and measure progress, equipping us with essential skills for tackling more advanced topics in matrix multiplication and optimization.
+We choose C over higher-level languages for several reasons. C provides direct access to hardware resources, enabling granular performance optimization. It also allows us to better understand the memory hierarchy and optimize access patterns, which is crucial for high-performance matrix operations. By comparing our C implementation to Python’s NumPy, we can benchmark performance and measure progress, equipping us with the skills for tackling more advanced topics in matrix multiplication and optimization.
 
 Benchmarking Setup and Code Organization
 ----------------------------------------
@@ -54,19 +54,18 @@ Our implementation uses square matrices (N x N) for both matrices A and B, with 
 
 With N = 8192 and using float32 (4 bytes per element), each matrix contains 67,108,864 elements. The size of each matrix (A, B, and C) is calculated as follows:
 
-67,108,864 * 4 bytes = 268,435,456 bytes ≈ 268.44 MB ≈ 0.26 GB
+67,108,864 * 4 bytes = 268,435,456 bytes ≈ 268 MB 
 
-This results in a total memory requirement of approximately 805.32 MB for all three matrices.
+This results in a total memory requirement of approximately 805 MB for all three matrices.
 
-We chose this large N value to reflect realistic performance characteristics and avoid cache-related anomalies. Modern high-end CPUs typically have L3 cache sizes ranging from 16MB to 512MB. Our chosen matrix size significantly exceeds these cache capacities, ensuring that:
+We chose this large N value to reflect realistic performance characteristics and avoid cache-related anomalies. Modern high-end CPUs typically have L3 cache sizes ranging from 16MB to 512MB. Our chosen matrix size exceeds these cache capacities, ensuring that:
 
-* No single matrix fits entirely in the L3 cache.
 * The total working set is much larger than the cache, forcing memory accesses to main RAM.
 * Cache evictions and reloads occur frequently during computation.
 
 This setup provides a clear picture of performance under typical conditions, exercising the full memory hierarchy and highlighting the importance of efficient memory access patterns.
 
-For benchmarking, we use an AWS c7a.32xlarge instance featuring an AMD EPYC 9R14 processor (2 sockets, 64 cores per socket, 128 cores total) without simultaneous multithreading. This instance has a 256MB L3 cache, which is still significantly smaller than our total matrix size. This powerful configuration is essential for managing our large matrices and obtaining accurate performance metrics that reflect real-world scenarios for large-scale matrix multiplication.
+For benchmarking, we use an AWS c7a.32xlarge instance featuring an AMD EPYC 9R14 processor (2 sockets, 64 cores per socket, 128 cores total) without simultaneous multithreading. This instance has a 512MB L3 cache, which is smaller than our total working set size. This large matrix size and higher-end AWS EC2 instance help us obtain accurate performance metrics that reflect real-world scenarios for large-scale matrix multiplication.
 
 *Code Structure and Organization*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -75,7 +74,7 @@ The code examples in this blog are primarily from our `matmul_lib.c <https://git
 
 We've organized our code into separate modules for clarity and maintainability. For detailed information about our project structure, please refer to our `README.md <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/README.md#project-structure>`_ file.
 
-As we explore different optimization techniques, we'll focus on relevant functions from `matmul_lib.c`, discussing how they integrate with the overall project structure.
+As we explore different optimization techniques, we'll focus on the relevant functions from our `matmul_lib.c` file, discussing how they implement different ways of performing matrix multiplication with the associated performance gains.  Note that the code snippets below ommit the `#pragma` propressor directoves in our code for simplicity, the repo contains parallel instructions that are out of scope for our conversations in this blog. 
 
 Naive Matrix Multiplication 
 ---------------------------
@@ -116,7 +115,7 @@ Following this formula, our C code implementation employs three nested loops to 
 *Naive Matrix Multiplication Performance* 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This naive approach effectively illustrates the link between algorithmic simplicity and computational inefficiency. With N set to 8192, the computation involves approximately 1,099.51 billion floating-point operations. Despite the large workload, our AWS c7a.32xlarge instance achieves a performance of **~25 GFLOPS**. This demonstrates the significant gap between the naive method's potential and the optimizations needed to harness the full computational power of our hardware. This setup provides a clear starting point for exploring more advanced optimization techniques in subsequent sections.
+This naive approach effectively illustrates the link between algorithmic simplicity and computational inefficiency. With N set to 8192, the computation involves approximately 1,099.51 billion floating-point operations. Despite the high-end CPU we have, our AWS c7a.32xlarge instance achieves a performance of **~25 GFLOPS**. This demonstrates the significant gap between the naive method's potential and the optimizations needed to harness the full computational power of our hardware. This setup provides a clear starting point for exploring more advanced optimization techniques in subsequent sections.
 
 Optimizing Matrix Multiplication
 --------------------------------
@@ -161,7 +160,7 @@ Our optimized matrix multiplication implementation leverages these techniques to
 *Optimized Matrix Multiplication Performance*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-By optimizing matrix multiplication, we achieve a significant performance boost. On the AWS c7a.32xlarge instance, the optimized implementation achieves approximately **270+ GFLOPS**, which represents more than a 10x increase over the naive approach. This performance gain demonstrates the effectiveness of optimization techniques in harnessing the full computational power of modern hardware.
+By optimizing matrix multiplication, we achieve a significant performance boost. On the AWS c7a.32xlarge instance, the optimized implementation achieves approximately **500 GFLOPS**, which represents more a 20x increase over the naive approach. This performance gain demonstrates the effectiveness of optimization techniques in harnessing the full computational power of modern hardware.
 
 This exploration into optimized matrix multiplication illustrates how strategic algorithmic improvements can dramatically enhance performance, providing a solid foundation for further exploration and learning in high-performance computing.
 
@@ -258,7 +257,7 @@ Below is the C implementation of matrix multiplication using vectorization techn
 *Performance Improvement*
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The vectorized implementation significantly enhances performance by taking full advantage of CPU capabilities. On the AWS c7a.32xlarge instance, this approach achieves approximately **2700+ GFLOPS**, representing a 10x performance increase over the previously optimized matrix multiplication. This demonstrates the power of vectorized operations in maximizing computational efficiency and speed in large-scale matrix operations.
+The vectorized implementation significantly enhances performance by taking full advantage of CPU capabilities. On the AWS c7a.32xlarge instance, this approach achieves approximately **3000 GFLOPS**, representing a 6x performance increase over the previously optimized matrix multiplication. This demonstrates the power of vectorized operations in maximizing computational efficiency and speed in large-scale matrix operations.
 
 Conclusion
 ----------

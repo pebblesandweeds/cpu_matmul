@@ -32,7 +32,7 @@ Run the Python script using `python python/numpy_matmul.py`
 
 ### Common Performance Output
 
-Both the Python and C scripts output the elapsed time for matrix multiplication, total FLOP, and GFLOPS performance.
+Both the Python and C scripts output the elapsed time for matrix multiplication, total FLOP, and GFLOPS performance.  Use `nice` to set process priority to get more consistent results, for example the C benchmarking can be run using `sudo nice -n -20 ./matmul`.  AWS instances will typically outperform physical hosts even when using the same CPUs. 
 
 ## Project Structure
 
@@ -63,13 +63,13 @@ The following performance metrics were achieved using the simple Python/Numpy sc
 * AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~3500+ GFLOPS @ 32-bit precision
 
 ### Naive C Implementation Performance Metrics
-* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~25+ GFLOPS
+* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~25 GFLOPS
 
 ### Optimized scalar C Implementation Performance Metrics
-* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~270+ GFLOPS
+* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~550 GFLOPS
 
 ### Vectorized C Implementation Performance Metrics
-* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~2700+ GFLOPS
+* AMD EPYC 9R14: 2 sockets, 64 cores per socket, 128 cores total, no SMT (AWS c7a.32xlarge): ~3000 GFLOPS
 
 ## License
 
