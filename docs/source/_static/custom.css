@@ -1,0 +1,23 @@
+/* Custom font and size for code blocks */
+.highlight pre {
+    font-family: 'Menlo', 'Courier New', Courier, monospace; /* Set Menlo as the preferred font */
+    font-size: 12.5px; /* Adjust the font size as needed */
+}
+
+/* Reduce padding on left and right sides */
+div.document {
+    padding-left: 8px;  /* TWEAK: Reduce this value to decrease left padding */
+    padding-right: 8px; /* TWEAK: Reduce this value to decrease right padding */
+}
+
+/* Ensure content width adjusts with padding changes */
+div.documentwrapper {
+    width: 100%;
+}
+
+/* Adjust body content if needed */
+div.body {
+    max-width: none; /* Remove any max-width constraints */
+    padding-left: 8px;  /* TWEAK: Adjust to fine-tune left content padding */
+    padding-right: 8px; /* TWEAK: Adjust to fine-tune right content padding */
+}
