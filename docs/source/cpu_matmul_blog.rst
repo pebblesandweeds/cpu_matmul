@@ -50,7 +50,7 @@ Benchmarking Setup and Code Organization
 *Matrix Configuration and Benchmarking Strategy*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Our implementation uses square matrices (N x N) for both matrices A and B, with N set to a static size of 8192. This choice simplifies the implementation while allowing for future extensions to non-square matrices. Defining N as a constant enables aggressive compiler optimizations and ensures consistent runtime behavior.
+Our implementation uses square matrices (N x N) for both matrices A and B, with N set to a static size of 8192. This choice simplifies the implementation while allowing for future extensions to non-square matrices. Defining N with a preprocessor C macro enables aggressive compiler optimizations and ensures consistent runtime behavior.
 
 With N = 8192 and using float32 (4 bytes per element), each matrix contains 67,108,864 elements. The size of each matrix (A, B, and C) is calculated as follows:
 
@@ -58,7 +58,7 @@ With N = 8192 and using float32 (4 bytes per element), each matrix contains 67,1
 
 This results in a total memory requirement of approximately 805.32 MB for all three matrices.
 
-We chose this large N value to reflect realistic performance characteristics and avoid cache-related anomalies. Modern high-end CPUs typically have L3 cache sizes ranging from 16MB to 64MB. Our chosen matrix size significantly exceeds these cache capacities, ensuring that:
+We chose this large N value to reflect realistic performance characteristics and avoid cache-related anomalies. Modern high-end CPUs typically have L3 cache sizes ranging from 16MB to 512MB. Our chosen matrix size significantly exceeds these cache capacities, ensuring that:
 
 * No single matrix fits entirely in the L3 cache.
 * The total working set is much larger than the cache, forcing memory accesses to main RAM.
