@@ -54,7 +54,9 @@ Our implementation performs matrix multiplication using the formula C = A x B, w
 
 With N = 8192, each matrix contains 67,108,864 elements. Using 32-bit floating-point precision (often referred to as "single precision" or "FP32"), the size of each matrix (A, B, and C) is calculated as follows:
 
-67,108,864 * 4 bytes = 268,435,456 bytes ≈ 268 MB 
+.. math::
+
+   67,108,864 \times 4 \text{ bytes} = 268,435,456 \text{ bytes} \approx 268 \text{ MB}
 
 This results in a total memory requirement of approximately 805 MB for all three matrices.
 
@@ -72,11 +74,16 @@ Building on our choice of matrix size, we conducted our benchmarks on an AWS c7a
 *Code Structure and Organization*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The code examples in this blog are primarily from our `matmul_lib.c <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/c/src/matmul_lib.c>`_ file, which contains the core matrix multiplication functions. Our `main.c <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/c/src/main.c>`_  file serves as the entry point, calling these functions to perform the matrix operations.
+Our matrix multiplication code is organized into separate modules for clarity and maintainability. The primary files are:
 
-We've organized our code into separate modules for clarity and maintainability. For detailed information about our project structure, please refer to our `README.md <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/README.md#project-structure>`_ file.
+* `matmul_lib.c <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/c/src/matmul_lib.c>`_: Contains the core matrix multiplication functions.
+* `main.c <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/c/src/main.c>`_: Serves as the entry point, calling functions from ``matmul_lib.c``.
 
-As we explore different optimization techniques, we'll focus on the relevant functions from our `matmul_lib.c` file, discussing how they implement different ways of performing matrix multiplication with the associated performance gains.  Note that the code snippets below ommit the `#pragma` propressor directoves in our code for simplicity, the repo contains parallel instructions that are out of scope for our conversations in this blog. 
+For a detailed overview of our project structure, please refer to our `README.md <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/README.md#project-structure>`_.
+
+As we explore different optimization techniques, we'll focus on relevant functions from ``matmul_lib.c``. We'll discuss how these functions implement various matrix multiplication methods and their associated performance gains.
+
+The code snippets in this blog omit the ``#pragma`` preprocessor directives for simplicity. The full code in our repository includes parallel instructions, which are out of scope for our discussions here.
 
 Naive Matrix Multiplication 
 ---------------------------
