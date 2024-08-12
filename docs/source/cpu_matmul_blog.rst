@@ -140,23 +140,28 @@ Our optimized matrix multiplication implementation leverages these techniques to
 
 .. code-block:: c
 
-   #define BLOCK_SIZE 64
-   #define TILE_SIZE 32
-   #define UNROLL_FACTOR 4
+   #define BLOCK_SIZE 64 // Optimizes memory across L1/L2/L3; fetch data in chunks 
+   #define TILE_SIZE 32 // Improves CPUs data processing; balances CPU resources and data caching
+   #define UNROLL_FACTOR 4 // Increases parallel operations w/out overwhelming memory
 
    void matmul_scalar(float A[N][N], float B[N][N], float C[N][N]) {
+   // Outer loops for block-wise operations
     for (int i = 0; i < N; i += BLOCK_SIZE) {
     for (int j = 0; j < N; j += BLOCK_SIZE) {
     for (int k = 0; k < N; k += BLOCK_SIZE) {
+        // Inner loops for tile-wise operations within blocks
         for (int ii = i; ii < i + BLOCK_SIZE && ii < N; ii += TILE_SIZE) {
         for (int jj = j; jj < j + BLOCK_SIZE && jj < N; jj += TILE_SIZE) {
+        // Loop unrolling for innermost loop
         for (int kk = k; kk < k + BLOCK_SIZE && kk < N; kk += UNROLL_FACTOR) {
-            float c_temp = C[ii][jj];
+            float c_temp = C[ii][jj]; // Temp variable for accumulation
+            // Compute on tiles
             for (int iii = ii; iii < ii + TILE_SIZE && iii < i + BLOCK_SIZE && iii < N; iii++) {
             for (int jjj = jj; jjj < jj + TILE_SIZE && jjj < j + BLOCK_SIZE && jjj < N; jjj++) {
+                // Matrix multiplication within a tile
                 c_temp += A[iii][kk] * B[kk][jjj];
             }
-            C[iii][jjj] = c_temp;
+            C[iii][jjj] = c_temp; // Store accumulated results
             }
         }
         }
@@ -169,9 +174,9 @@ Our optimized matrix multiplication implementation leverages these techniques to
 *Optimized Matrix Multiplication Performance*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-By optimizing matrix multiplication, we achieve a significant performance boost. On the AWS c7a.32xlarge instance, the optimized implementation achieves approximately **500 GFLOPS**, which represents more a 20x increase over the naive approach. This performance gain demonstrates the effectiveness of optimization techniques in harnessing the full computational power of modern hardware.
+By optimizing matrix multiplication, we achieve a significant performance boost. Our approach employs three key strategies: dividing matrices into cache-friendly blocks, further subdividing into efficiently processable tiles, and using loop unrolling for parallel operations. These techniques work together to ensure optimal data availability and CPU resource utilization.
 
-This exploration into optimized matrix multiplication illustrates how strategic algorithmic improvements can dramatically enhance performance, providing a solid foundation for further exploration and learning in high-performance computing.
+On the AWS c7a.32xlarge instance, this optimized implementation achieves approximately **500 GFLOPS**, representing more than a *20x increase* over the naive approach. This dramatic improvement stems from better use of the CPU's cache hierarchy, reduced memory access times, and increased instruction-level parallelism. While further scalar optimizations are possible, we're approaching the limits of what can be achieved without leveraging more advanced hardware features. The next step in boosting performance is to utilize vectorized operations, which we'll explore in the following section.
 
 Vectorized Matrix Multiplication
 --------------------------------
@@ -201,11 +206,13 @@ Below is the C implementation of matrix multiplication using vectorization techn
 .. code-block:: c
 
    void matmul_vectorized(float A[N][N], float B[N][N], float C[N][N]) {
+       // Data alignment (allocate memory for B_col)
        float (*B_col)[N] = aligned_alloc(32, N * N * sizeof(float));
        if (B_col == NULL) {
            fprintf(stderr, "Memory allocation failed\n");
            exit(1);
        }
+       // Transposition (transpose B into B_col for better memory access patterns)
        for (int j = 0; j < N; j += 32) {
            for (int k = 0; k < N; k++) {
                for (int jj = 0; jj < 32 && j + jj < N; jj++) {
@@ -216,6 +223,7 @@ Below is the C implementation of matrix multiplication using vectorization techn
        {
            for (int j = 0; j < N; j += 32) {
                for (int i = 0; i < N; i += 32) {
+                   // SIMD instructions (__m256 for 256-bit for SIMD operations)
                    __m256 c[32][32];
                    for (int ii = 0; ii < 32; ii++) {
                        for (int jj = 0; jj < 32; jj++) {
@@ -223,6 +231,7 @@ Below is the C implementation of matrix multiplication using vectorization techn
                        }
                    }
                    for (int k = 0; k < N; k += 32) {
+                       // Prefetching (fetch data into cache before we use it)
                        if (k + 128 < N) {
                            for (int ii = 0; ii < 32; ii++) {
                                _mm_prefetch((char*)&A[i+ii][k + 128], _MM_HINT_T1);
@@ -236,6 +245,7 @@ Below is the C implementation of matrix multiplication using vectorization techn
                                b[ii][kk] = _mm256_load_ps(&B_col[j+ii][k+kk*8]);
                            }
                        }
+                       // Loop unrolling (unroll inner loop for vector operations)
                        for (int ii = 0; ii < 32; ii++) {
                            for (int jj = 0; jj < 32; jj++) {
                                c[ii][jj] = _mm256_fmadd_ps(a[ii][0], b[jj][0], c[ii][jj]);
@@ -245,6 +255,7 @@ Below is the C implementation of matrix multiplication using vectorization techn
                            }
                        }
                    }
+                   // SIMD Instructions (final matrix multiplication reduction using SIMD)
                    for (int ii = 0; ii < 32 && i + ii < N; ii++) {
                        for (int jj = 0; jj < 32 && j + jj < N; jj++) {
                            __m256 sum = c[ii][jj];
@@ -266,7 +277,9 @@ Below is the C implementation of matrix multiplication using vectorization techn
 *Performance Improvement*
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The vectorized implementation significantly enhances performance by taking full advantage of CPU capabilities. On the AWS c7a.32xlarge instance, this approach achieves approximately **3000 GFLOPS**, representing a 6x performance increase over the previously optimized matrix multiplication. This demonstrates the power of vectorized operations in maximizing computational efficiency and speed in large-scale matrix operations.
+The vectorized implementation significantly enhances performance by leveraging five key techniques in a strategic order. First, data alignment ensures efficient memory access for SIMD operations. Transposition optimizes the data layout, improving access patterns crucial for matrix operations. SIMD instructions then enable parallel processing of multiple data points, forming the core of our vectorization strategy. Prefetching minimizes cache misses by loading data before it's needed, further improving efficiency. Finally, loop unrolling increases the throughput of vector operations. By combining these techniques, we fully utilize the CPU's vectorization capabilities, resulting in a dramatic performance boost.
+
+On the AWS c7a.32xlarge instance, this vectorized approach achieves approximately **3000 GFLOPS**, representing a *6x performance increase* over the previously optimized scalar implementation. This stark contrast highlights the fundamental difference between scalar and vectorized operations. While scalar operations process data sequentially, one element at a time, vectorized operations leverage SIMD to process multiple data elements simultaneously. This parallelism at the instruction level allows for significantly higher throughput, demonstrating the power of vectorized operations in maximizing computational efficiency and speed in large-scale matrix operations.
 
 Conclusion
 ----------
