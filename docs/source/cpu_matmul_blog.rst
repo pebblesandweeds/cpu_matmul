@@ -9,10 +9,10 @@ CPU Matrix Multiplication from Scratch in C
 
  We demonstrate the performance evolution on an `AWS c7a.32xlarge EC2 instance <https://aws.amazon.com/ec2/instance-types/c7a/>`_ through the following implementations using 32-bit precision:
 
- - **Baseline with Python/NumPy**: **~3500 GFLOPS**, using `this implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/python/numpy_matmul.py>`_ for comparison with our C code.
+ - **Baseline with Python/NumPy**: **~3,500 GFLOPS**, using `this implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/python/numpy_matmul.py>`_ for comparison with our C code.
  - **Naive C Approach**: **~25 GFLOPS**, starting with a simple `scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L28>`_.
  - **Optimized Scalar C**: **~500 GFLOPS**, optimizing the `naive scalar implementation <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L39>`_ using tiling, blocking, and loop unrolling.
- - **Vectorized C Operations**: **~3000 GFLOPS**, leveraging `vectorized instructions <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64>`_ for enhanced performance.
+ - **Vectorized C Operations**: **~3,,000 GFLOPS**, leveraging `vectorized instructions <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64>`_ for enhanced performance.
 
  These results demonstrate the effectiveness of implementing matrix multiplication from scratch in C, achieving performance levels close to those of Python's NumPy.
 
@@ -21,28 +21,41 @@ CPU Matrix Multiplication from Scratch in C
 Introduction
 ------------
 
-Matrix multiplication is a core computational operation in machine learning, particularly in deep learning and neural networks.  Multiplying matrices is crucial for translating and scaling input data across various computational structures, a fundamental step in processing complex interactions of data features within models architectures.  Optimizing computational efficiency and accuracy during both model training and inference phases directly relies on fast matrix multiplication.  
+Matrix multiplication is a core computational operation in machine learning, particularly in deep learning and neural networks.  Multiplying matrices is important for translating and scaling input data across various computational structures, a key step in processing interactions of data features within models architectures.  Optimizing computational efficiency and accuracy during both model training and inference phases directly relies on fast matrix multiplication.  
 
-This blog explores building C implementations of CPU matrix multiplication, focusing on efficient algorithms and low-level optimizations. By working with C, we gain insights into performance enhancements often hidden by high-level libraries, critical for scaling matrix multiplication calculations for transformer based models to handle large volumes of computations.  
+This blog explores building C implementations of CPU matrix multiplication from scratch, focusing on efficient algorithms and low-level optimizations. By working with C, we gain insights into performance enhancements often hidden by high-level libraries, critical for scaling matrix multiplication calculations for transformer based models to handle large volumes of computations.  
 
 
 Why is Matrix Multiplication Important?
 ---------------------------------------
 
-Matrix multiplication is fundamental to neural network computations, particularly in forward and backward propagation. In forward propagation, it's used to combine input data with learned weights, producing activations that flow through the network. During backward propagation, matrix multiplication helps calculate gradients, enabling the network to update its weights and learn from errors. The efficiency of matrix multiplication directly impacts the speed and scalability of neural network training and inference.
+Matrix multiplication is essential to neural network computations, particularly in forward and backward propagation.
 
-Matrix multiplication is crucial in various machine learning domains, including natural language processing, computer vision, and audio processing. It forms the core of transforming input data, computing activations, and updating model parameters. In transformer architectures, such as those used in GPT models, matrix multiplication powers self-attention mechanisms and feedforward networks, enabling the efficient computation of attention weights and the transformation of data through network layers.
+* **Forward Propagation:** Matrix multiplication combines input data with learned weights, producing activations that flow through the network.
+
+* **Backward Propagation:** Matrix multiplication helps calculate gradients, enabling the network to update its weights and learn from errors.
+
+The efficiency of matrix multiplication directly impacts the speed and scalability of neural network training and inference.
+
+Matrix multiplication is vital in many machine learning domains, including natural language processing, computer vision, and audio processing. It is central to transforming input data, computing activations, and updating model parameters. These domains heavily rely on transformer architectures, where matrix multiplication powers self-attention mechanisms and feedforward networks, enabling the efficient computation of attention weights and data transformation through network layers.
 
 As model sizes grow, computational demands increase significantly. Though no longer at the cutting edge, architectures like GPT-2 and GPT-3 still involve millions of matrix multiplications across multiple layers, attention mechanisms, embedding layers, position-wise feedforward networks, and output linear layers, highlighting the significant computational load requred to process and propagate inputs, activations, and gradients through these complex networks.
 
-Optimizing matrix multiplication is therefore critical for improving the efficiency of large-scale models. It directly affects training time, resource consumption, and the ability to scale to larger datasets and model sizes. Understanding and optimizing this operation is vital for advancing the capabilities of machine learning models while managing computational resources effectively.
+Optimizing matrix multiplication is therefore critical for improving the efficiency of large-scale models. It directly affects training time, resource consumption, and the ability to scale to larger datasets and model sizes. Understanding and optimizing this operation is key to advancing the capabilities of machine learning models while managing computational resources effectively.
 
-Why Matrix Multiplication on CPUs and in C?
--------------------------------------------
+Matrix Multiplication on CPUs Written in C
+------------------------------------------
 
-While GPUs are preferred for high-performance matrix operations, we start here with CPUs to establish a strong foundation in matrix multiplication and optimization techniques. Implementing matrix operations on CPUs first helps us understand the mechanics and challenges of performance optimization that are applicable to both CPU and GPU implementations.
+**Why aren't we using GPUs?**
 
-We choose C over higher-level languages for several reasons. C provides low-level access to system resources and control over execution, making it ideal for optimizing performance in computationally intensive tasks.  C also allows us to better understand the memory hierarchy and optimize access patterns, which is crucial for high-performance matrix operations. By comparing our C implementation to Python’s NumPy, we can benchmark performance and measure progress, providing us with a deeper understanding of matrix multiplication and low-level performance optimization techniques. 
+* Starting with CPUs helps establish a foundational understanding of matrix multiplication and optimization techniques.
+* Implementing matrix operations on CPUs helps us better understand performance optimization challenges and prepares us for future GPU implementations.
+
+**Why aren't we using Python?**
+
+* C provides low-level access to system resources and control over execution, ideal for optimizing performance in computationally intensive tasks.
+* Building an implementation of matrix multiplication in C improves understanding of the memory hierarchy and optimizes access patterns, which are important for high-performance matrix operations.
+* We can compare our C implementation to Python's NumPy to benchmark performance to enhance our understanding of matrix multiplication and optimization techniques.
 
 Benchmarking Setup and Code Organization
 ----------------------------------------
@@ -50,9 +63,14 @@ Benchmarking Setup and Code Organization
 *Matrix Configuration and Benchmarking Strategy*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Our implementation performs matrix multiplication using the formula C = A x B, where both matrices A and B are square matrices of size N×N. We set N to a static size of 8192, simplifying the implementation and laying the groundwork for future extensions to non-square matrices. By defining N with a preprocessor C macro (`#define N 8192`), we enable aggressive compiler optimizations and ensure consistent runtime behavior.
+Our implementation performs matrix multiplication using the formula C = A x B, where both matrices A and B are square matrices of size N × N. We set N to a static size of 8,192, simplifying the implementation and laying the groundwork for future extensions to non-square matrices. By defining N with a preprocessor C macro (``#define N 8192``), we can enable aggressive compiler optimizations and ensure consistent runtime behavior.
 
-With N = 8192, each matrix contains 67,108,864 elements. Using 32-bit floating-point precision (often referred to as "single precision" or "FP32"), the size of each matrix (A, B, and C) is calculated as follows:
+In this setup, we are not implementing separate kernels with varying block sizes because each matrix is fixed at N × N. A kernel typically refers to an optimized code block designed for flexible execution across varying data sizes or hardware conditions. Since N is static in our implementation, the complexity of multiple kernels is unnecessary, allowing us to focus on optimizing for a single, fixed configuration.
+
+Memory Requirements
+'''''''''''''''''''
+
+With N = 8,192, each matrix contains 67,108,864 elements. Using 32-bit floating-point precision (often referred to as "single precision" or "FP32"), the size of each matrix (A, B, and C) is calculated as follows:
 
 .. math::
 
@@ -60,7 +78,39 @@ With N = 8192, each matrix contains 67,108,864 elements. Using 32-bit floating-p
 
 This results in a total memory requirement of approximately 805 MB for all three matrices.
 
-We chose this large N value (8192) to represent a realistic problem size for matrix multiplication. Modern high-end CPUs, including server-grade processors, have L3 cache sizes that can range up to 512MB. With our matrix size of approximately 268MB each, the entire problem (all three matrices) doesn't fit in L3 cache simultaneously, but significant portions of the working set can potentially reside in cache during computation. This creates a scenario where careful cache management becomes crucial for performance. Our setup allows us to:
+Computational Complexity
+''''''''''''''''''''''''
+
+Calculating the computational effort for matrix multiplication involves determining the total number of floating point operations (FLOPs) needed. When multiplying two :math:`N \times N` matrices, the resulting matrix is also :math:`N \times N` (:math:`N^2` elements). Each element is the result of a dot product between a row from the first matrix and a column from the second matrix. This involves:
+
+- **Multiplications:** Each element requires multiplying :math:`N` pairs of numbers (one from the row and one from the column).
+
+- **Additions:** The products from the multiplications are then summed together, requiring :math:`N - 1` additions (adding two numbers requires one addition, adding three numbers requires two additions, etc).
+
+Thus, the total number of FLOPs is calculated as:
+
+.. math::
+
+   \text{Total FLOPs} = 2N^3 - N^2
+
+For large matrices, the :math:`2N^3` term contributes primarily to the total FLOPs, so it is often used to estimate the computational effort. This simplifies to:
+
+.. math::
+
+   \text{Total FLOPs} = 2N^3
+
+This simplification highlights how the computational effort grows with the size of the matrices. For our chosen matrix size of 8192 x 8192, this results in:
+
+.. math::
+
+   2 \times 8192^3 = 1,099,511,627,776 \approx 1.1 \text{ TFLOPs}
+
+This large number of operations underscores the computational intensity of large-scale matrix multiplication and highlights the importance of our optimization efforts. It is also important to note the distinction between FLOPs, which measure the total operations required, and FLOPS (Floating Point Operations Per Second), which indicate the system's performance capability.
+
+Cache Considerations
+''''''''''''''''''''
+
+We chose this large N value (8,192) to represent a realistic problem size for our matrix multiplication.  With our matrix size of approximately 268MB each, the entire problem (all three matrices) doesn't fit in L3 cache simultaneously, but significant portions of the working set can potentially reside in cache during computation. This creates a scenario where careful cache management becomes crucial for performance. Our setup allows us to:
 
 * Explore the effects of cache blocking and tiling optimizations
 * Observe how different algorithms balance cache utilization and main memory access
@@ -69,7 +119,10 @@ We chose this large N value (8192) to represent a realistic problem size for mat
 
 This approach provides insight into algorithm design for real-world, cache-sensitive computations.
 
-Building on our choice of matrix size, we conducted our benchmarks on an AWS c7a.32xlarge instance. This instance features an AMD EPYC 9R14 processor with 2 sockets, 64 cores per socket, totaling 128 cores without simultaneous multithreading. Notably, it has a 512MB L3 cache, which, while substantial, is still smaller than our total working set size of about 805MB. This configuration allows us to observe the interplay between cache utilization and main memory access, providing performance metrics that reflect real-world scenarios for large-scale matrix multiplication on high-performance computing infrastructure.
+Benchmarking Environment
+''''''''''''''''''''''''
+
+Building on our choice of matrix size, we conducted our benchmarks on an AWS c7a.32xlarge instance. This instance features an AMD EPYC 9R14 processor with 2 sockets, 64 cores per socket, totaling 128 cores without simultaneous multithreading. Notably, it has a 512MB L3 cache, which, while substantial, is still smaller than our total working set size of about 805MB (three 268MB matrices).  This configuration allows us to observe the interplay between cache utilization and main memory access, as significant portions of the working set can reside in cache during computation, but not the entire problem simultaneously. By using this high-performance computing infrastructure, we can obtain performance metrics that reflect real-world scenarios for large-scale matrix multiplication, where careful cache management becomes crucial for optimal performance. 
 
 *Code Structure and Organization*
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -78,6 +131,7 @@ Our matrix multiplication code is organized into separate modules for clarity an
 
 * `matmul_lib.c <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/c/src/matmul_lib.c>`_: Contains the core matrix multiplication functions.
 * `main.c <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/c/src/main.c>`_: Serves as the entry point, calling functions from ``matmul_lib.c``.
+* `Makefile <https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/Makefile>`_: Specifies teh build process using the ``gcc`` compiler with optimization flags ``CFLAGS = -mavx2 -fopenmp -O3 -march=native -I./include``
 
 For a detailed overview of our project structure, please refer to our `README.md <https://github.com/pebblesandweeds/cpu_matmul/blob/dev/README.md#project-structure>`_.
 
@@ -188,7 +242,7 @@ Scalar operations process data one element at a time, performing calculations se
 
 To write vectorized code, several elements are necessary:
 
-1. **SIMD Instructions**: Using SIMD instructions like AVX for parallel computation. Learn more about SIMD from `Wikipedia <https://en.wikipedia.org/wiki/SIMD>`_.
+1. **SIMD Instructions**: Using SIMD instructions like AVX for parallel computation, including operations like Fused Multiply-Add (FMA) for combining addition and multiplication. Learn more about SIMD from `Wikipedia <https://en.wikipedia.org/wiki/SIMD>`_.
 
 2. **Data Alignment**: Ensuring data is aligned in memory for efficient SIMD processing. Check out `Data Alignment <https://en.wikipedia.org/wiki/Data_structure_alignment>`_.
 
@@ -245,7 +299,7 @@ Below is the C implementation of matrix multiplication using vectorization techn
                                b[ii][kk] = _mm256_load_ps(&B_col[j+ii][k+kk*8]);
                            }
                        }
-                       // Loop unrolling (unroll inner loop for vector operations)
+                       // Loop unrolling (unroll inner loop for vector operations) and FMA (fused multiply-add)
                        for (int ii = 0; ii < 32; ii++) {
                            for (int jj = 0; jj < 32; jj++) {
                                c[ii][jj] = _mm256_fmadd_ps(a[ii][0], b[jj][0], c[ii][jj]);
@@ -277,19 +331,20 @@ Below is the C implementation of matrix multiplication using vectorization techn
 *Performance Improvement*
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The vectorized implementation significantly enhances performance by leveraging five key techniques in a strategic order. First, data alignment ensures efficient memory access for SIMD operations. Transposition optimizes the data layout, improving access patterns crucial for matrix operations. SIMD instructions then enable parallel processing of multiple data points, forming the core of our vectorization strategy. Prefetching minimizes cache misses by loading data before it's needed, further improving efficiency. Finally, loop unrolling increases the throughput of vector operations. By combining these techniques, we fully utilize the CPU's vectorization capabilities, resulting in a dramatic performance boost.
+The vectorized implementation significantly enhances performance by leveraging several key techniques. Data alignment ensures efficient memory access for SIMD operations, while transposition optimizes data layout to improve access patterns crucial for matrix operations. Using SIMD instructions and the 256-bit YMM `registers <https://en.wikipedia.org/wiki/Processor_register>`_, the implementation enables parallel processing of multiple data points, allowing the simultaneous processing of eight single-precision floating-point numbers and maximizing data throughput. Prefetching minimizes cache misses by loading data before it's needed, and loop unrolling increases the throughput of vector operations by reducing loop overhead and enabling more parallel execution of instructions. Together, these techniques fully utilize the CPU's vectorization capabilities, resulting in a dramatic performance boost.
 
 On the AWS c7a.32xlarge instance, this vectorized approach achieves approximately **3000 GFLOPS**, representing a *6x performance increase* over the previously optimized scalar implementation. This stark contrast highlights the fundamental difference between scalar and vectorized operations. While scalar operations process data sequentially, one element at a time, vectorized operations leverage SIMD to process multiple data elements simultaneously. This parallelism at the instruction level allows for significantly higher throughput, demonstrating the power of vectorized operations in maximizing computational efficiency and speed in large-scale matrix operations.
 
 Conclusion
 ----------
 
-This exploration of matrix multiplication demonstrates the substantial gains possible through strategic optimizations in C. By transitioning from a naive implementation to a highly optimized vectorized approach, we achieved a 100x improvement in performance. These results underscore the importance of understanding and applying advanced techniques such as tiling, blocking, and SIMD vectorization.
+Our journey through matrix multiplication optimization showcases the remarkable potential for performance enhancement in computational tasks. Starting from a naive implementation that achieved only 25 GFLOPS, we progressed to an optimized scalar version reaching 500 GFLOPS—a 20x improvement. The final leap to vectorized operations propelled our performance to an impressive 3000 GFLOPS, marking a 120x total increase from our starting point. This progression underscores the power of thoughtful optimization techniques such as cache-friendly blocking, efficient tiling, and SIMD vectorization in maximizing CPU capabilities.
 
-The journey through these optimizations highlights the potential of C in unlocking the full computational capabilities of modern hardware. As machine learning models grow increasingly complex, mastering these techniques becomes crucial for developing efficient and scalable solutions. This foundational work provides a stepping stone for future explorations into more sophisticated algorithms and hardware accelerations.
+Notably, our vectorized C implementation from scratch nearly achieves parity with NumPy's performance of 3500 GFLOPS. This accomplishment not only demonstrates the effectiveness of low-level optimizations but also provides valuable insights into the inner workings of high-performance libraries. By building this foundation on CPUs, we've gained a deep understanding of memory hierarchies, cache utilization, and parallelism strategies. These lessons form a solid basis for future GPU implementations, where concepts like data locality and parallel processing are equally crucial, albeit applied differently. As we look towards GPU optimization, we're well-equipped to tackle the unique challenges and opportunities presented by massively parallel architectures, armed with a comprehensive understanding of performance optimization principles.
 
-References
-----------
+Further Reading
+---------------
 
-- `Matrix Multiplication on Wikipedia <https://en.wikipedia.org/wiki/Matrix_multiplication>`_
-- `Linear Algebra Essentials <https://www.khanacademy.org/math/linear-algebra>`_
+* `GEMM Optimization Tutorial <https://github.com/flame/how-to-optimize-gemm>`_ and `BLISlab Tutorial <https://github.com/flame/blislab/blob/master/tutorial.pdf>`_
+* `Beating NumPy in 150 lines of C Code <https://salykova.github.io/matmul-cpu>`_ plus the `repo <https://github.com/salykova/matmul.c>`_
+* George Hotz's six hour video stream `Can You Mutliply a Matrix? <https://youtu.be/VgSQ1GOC86s?si=HP1VB1UDF384_xQt>`_ and `gemm.c code <https://github.com/tinygrad/tinygrad/blob/master/extra/gemm/gemm.c>`_
