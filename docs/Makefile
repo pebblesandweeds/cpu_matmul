@@ -22,3 +22,7 @@ help:
 clean:
 	@$(SPHINXBUILD) -M clean "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 	cd build; git worktree add -f html gh-pages
+
+html: Makefile
+    @$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+    @echo "blog.pebblesandweeds.com" > $(BUILDDIR)/html/CNAME
