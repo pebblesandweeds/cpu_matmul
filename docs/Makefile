@@ -21,4 +21,4 @@ help:
 
 clean:
 	@$(SPHINXBUILD) -M clean "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
-	cd $(BUILDDIR) && git worktree add -f . gh-pages
+	cd build; git worktree add -f html gh-pages
