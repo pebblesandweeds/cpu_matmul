@@ -17,6 +17,7 @@ release = '1.0'
 # Adding `sphinxcontrib.plantuml` to list of extensions
 extensions = [
     'sphinxcontrib.plantuml',
+    "sphinx.ext.githubpages",
 ]
 
 # PlantUML jar file
