@@ -44,7 +44,7 @@
 <li><p><strong>Baseline with Python/NumPy</strong>: <strong>~3,500 GFLOPS</strong>, using <a class="reference external" href="https://github.com/pebblesandweeds/cpu_matmul/blob/main/python/numpy_matmul.py">this implementation</a> for comparison with our C code.</p></li>
 <li><p><strong>Naive C Approach</strong>: <strong>~25 GFLOPS</strong>, starting with a simple <a class="reference external" href="https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L28">scalar implementation</a>.</p></li>
 <li><p><strong>Optimized Scalar C</strong>: <strong>~500 GFLOPS</strong>, optimizing the <a class="reference external" href="https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L39">naive scalar implementation</a> using tiling, blocking, and loop unrolling.</p></li>
-<li><p><strong>Vectorized C Operations</strong>: <strong>~3,,000 GFLOPS</strong>, leveraging <a class="reference external" href="https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64">vectorized instructions</a> for enhanced performance.</p></li>
+<li><p><strong>Vectorized C Operations</strong>: <strong>~3,000 GFLOPS</strong>, leveraging <a class="reference external" href="https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c#L64">vectorized instructions</a> for enhanced performance.</p></li>
 </ul>
 <p>These results demonstrate the effectiveness of implementing matrix multiplication from scratch in C, achieving performance levels close to those of Python’s NumPy.</p>
 <p>Get all of the code <a class="reference external" href="https://github.com/pebblesandweeds/cpu_matmul">in this repo</a>.</p>
