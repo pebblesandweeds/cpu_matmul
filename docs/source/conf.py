@@ -45,3 +45,17 @@ html_static_path = ['_static']
 html_css_files = [
     'custom.css',  # Ensure this matches the path where your CSS is located
 ]
+
+# SEO Metadata
+html_meta = {
+    "description": "Pebbles and Weeds Blog: Exploring data science, AI, programming, and high-performance computing",
+    "keywords": "data science, AI, machine learning, GPU computing, C programming, high-performance computing",
+    "author": "Pebbles and Weeds",
+    "robots": "index, follow"
+}
+
+# Sitemap
+extensions.append('sphinx_sitemap')
+html_baseurl = 'https://blog.pebblesandweeds.com/'  # Replace with your actual URL
+sitemap_filename = 'sitemap.xml'
+
