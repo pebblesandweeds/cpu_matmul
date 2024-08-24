@@ -1,25 +1,25 @@
-.. CPU Matrix Multiplication documentation master file, created by
-   sphinx-quickstart on Sun Aug  4 10:37:55 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+======================
+Pebbles and Weeds Blog
+======================
 
-CPU Matrix Multiplication documentation
-=======================================
+Blog Entries
+============
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+* `CPU Matrix Multiplication <cpu_matmul_blog.html>`_
 
+Presentations
+=============
+
+* `Empowering Generative AI with Databricks and AMD <https://www.youtube.com/watch?v=FB6H4NwFGzQ>`_ (Data & AI Conference 2024)
+* `Monetizing Data Assets: Sharing Data, Models and Features <https://www.youtube.com/watch?v=wj_WtrrEfi8>`_ (Data & AI Conference 2023)
+
+Links
+=====
+
+* `LinkedIn <https://www.linkedin.com/in/keith-anderson-2480b027/>`_
 
 .. toctree::
    :maxdepth: 2
-   :caption: Blog
+   :hidden:
 
    cpu_matmul_blog
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
