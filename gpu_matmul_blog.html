@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Accelerating Matrix Multiplication on AMD GPUs with rocBLAS in C &#8212; gpu_matmul  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=c058f7c8" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="accelerating-matrix-multiplication-on-amd-gpus-with-rocblas-in-c">
+<h1>Accelerating Matrix Multiplication on AMD GPUs with rocBLAS in C<a class="headerlink" href="#accelerating-matrix-multiplication-on-amd-gpus-with-rocblas-in-c" title="Link to this heading">¶</a></h1>
+<div class="admonition-highlights admonition">
+<p class="admonition-title">Highlights</p>
+<p>Matrix multiplication is the core operation behind deep learning, driving the computations in neural networks for model training, fine-tuning, and inference. This blog post demonstrates how AMD’s rocBLAS library can be used in C to achieve matrix multiplication performance comparable to PyTorch’s implementation, leveraging low-level control for efficient use of GPUs.</p>
+<ul class="simple">
+<li><p><strong>Problem Scale</strong>: We perform multiplication of two 16,384 x 16,384 matrices, requiring ~3.21 GB of memory and ~8.8 TFLOPs of computation.</p></li>
+<li><p><strong>PyTorch Baseline</strong>: Achieves <strong>~37.5 TFLOPS</strong> using <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul/blob/main/pytorch/pytorch_matmul.py">this simple code</a>. PyTorch’s high-level API (<code class="docutils literal notranslate"><span class="pre">torch.matmul</span></code>) abstracts the underlying rocBLAS operations, providing ease of use without sacrificing performance.</p></li>
+<li><p><strong>rocBLAS Implementation in C</strong>: Matches PyTorch at <strong>~37.5 TFLOPS</strong> with <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul/blob/main/c/src/matrix_operations.c">this C implementation</a>. By directly calling <code class="docutils literal notranslate"><span class="pre">rocblas_sgemm()</span></code>, we expose GPU programming concepts like memory allocation, data transfer, and operation parameters which provide insight into the underlying processes that high-level APIs abstract away.</p></li>
+<li><p><strong>Performance Gain</strong>: Our GPU implementation achieves a 12.5x speedup over our <a class="reference external" href="https://github.com/pebblesandweeds/cpu_matmul/blob/main/c/src/matmul_lib.c">optimized CPU version</a> (3 TFLOPS to 37.5 GFLOPS).</p></li>
+<li><p><strong>Accuracy Verification</strong>: The C implementation includes spot-checking to verify GPU computation accuracy against CPU results.</p></li>
+</ul>
+<p>This comparison showcases how low-level C programming with rocBLAS can achieve performance parity with high-level frameworks like PyTorch. The C implementation offers a valuable learning opportunity, introducing developers to GPU programming concepts and serves as a bridge between high-level APIs and custom GPU kernel development, providing a deeper understanding of GPU computing without sacrificing efficiency.</p>
+<p>All benchmarks were run on an AMD Instinct MI250X GPU, demonstrating the capabilities of AMD’s high-performance hardware for deep learning.</p>
+<p>Get all of the code <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul">in this repo</a>.</p>
+</div>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">¶</a></h2>
+<p>Matrix multiplication is fundamental to deep learning, powering neural network computations in both forward propagation and backpropagation.  In <a class="reference external" href="https://blog.pebblesandweeds.com/cpu_matmul_blog.html#why-is-matrix-multiplication-important">our previous blog post</a>, we explored implementing matrix multiplication from scratch in C on <a class="reference external" href="https://aws.amazon.com/ec2/instance-types/c7a/">AMD EPYC CPUs</a>. This CPU implementation laid the groundwork for understanding the core principles behind matrix multiplication, preparing us to focus next on GPU-accelerated computations.</p>
+<p>Building on the CPU-based matrix multiplication foundation, this blog post extends our exploration to GPU-based computations. We demonstrate how to harness the power of AMD GPUs for high-performance matrix multiplication using the <a class="reference external" href="https://github.com/rocm/rocBLAS">rocBLAS library</a> in C. While rocBLAS is not as low-level as building custom GPU kernels from scratch, it provides a middle ground, offering more granular control than high-level libraries like PyTorch. Our goal is to showcase how this C implementation with rocBLAS can achieve performance parity with high-level libraries, while offering developers greater insight into GPU resource management and provide a deeper understanding of GPU programming concepts without the complexity of writing kernels from scratch.</p>
+</section>
+<section id="matrix-multiplication-cpus-vs-gpus">
+<h2>Matrix Multiplication: CPUs vs. GPUs<a class="headerlink" href="#matrix-multiplication-cpus-vs-gpus" title="Link to this heading">¶</a></h2>
+<p>Implementing matrix multiplication differs significantly between CPUs and GPUs, largely due to the way each architecture handles parallelism and memory access. These differences impact how we approach performance optimization for large-scale operations.</p>
+<ul class="simple">
+<li><p><strong>CPUs</strong> are optimized for general-purpose, sequential tasks. They excel at handling smaller workloads, complex operations, and situations requiring low latency for individual operations or when working with sparse matrices. Efficient CPU matrix multiplication in C focuses on cache utilization and instruction-level parallelism. While CPUs can leverage multiple cores through threading, their parallelism is limited by core count, making them less ideal for very large matrix operations.</p></li>
+<li><p><strong>GPUs</strong>, by contrast, are designed for massively parallel computation, making them well-suited for the dense arithmetic operations required by matrix multiplication. GPUs contain thousands of lightweight cores that can perform many matrix operations simultaneously, leading to substantial performance gains for large workloads.</p></li>
+</ul>
+<p>Modern GPUs are equipped with various computation units, such as <a class="reference external" href="https://gpuopen.com/learn/amd-lab-notes/amd-lab-notes-register-pressure-readme/#registers-and-occupancy">SIMD processors</a> and specialized matrix multiplication units, known as Tensor Cores in NVIDIA GPUs and Matrix Cores in AMD GPUs. While SIMD units offer flexibility, dedicated units like Matrix Cores deliver significantly higher performance for matrix operations. Writing efficient GPU code requires using specialized libraries that fully utilize these architectural features. Libraries such as AMD’s rocBLAS for AMD GPUs and NVIDIA’s cuBLAS are designed to harness these matrix units, providing performance far beyond what general-purpose GPU code can achieve.</p>
+<p>In this blog, we shift from CPU-based matrix multiplication to implementing it on GPUs using AMD’s rocBLAS library in C. GPUs process data differently, leveraging parallel execution and optimized memory transfers to achieve high throughput. Understanding these differences is essential when writing C code that fully utilizes GPU capabilities, providing the foundation for more complex deep learning tasks in frameworks like PyTorch.</p>
+</section>
+<section id="amd-gpu-programming-in-c">
+<h2>AMD GPU Programming in C<a class="headerlink" href="#amd-gpu-programming-in-c" title="Link to this heading">¶</a></h2>
+<p><strong>Why use C instead of PyTorch?</strong></p>
+<p>Using PyTorch provides a high-level, user-friendly interface for performing matrix multiplication on GPUs, abstracting away much of the complexity. However, writing matrix multiplication in C gives us direct, low-level control over the GPU, offering insight into how the hardware operates behind the scenes. This understanding is key for those looking to write custom GPU kernels in C/C++ in the future, as it helps in optimizing code and fully exploiting the hardware for maximum performance. It also offers a deeper understanding of what PyTorch handles automatically, equipping developers with the knowledge needed to go beyond existing frameworks.</p>
+<p><strong>Why rocBLAS?</strong></p>
+<p>rocBLAS is a high-level library provided by AMD that offers efficient GPU implementations of BLAS operations, including matrix multiplication. This is an ideal starting point for programming GPUs with C, as it abstracts many of the complexities of directly writing GPU kernels while still providing a hands-on experience with GPU programming.  Starting with rocBLAS allows us to learn the fundamentals of GPU programming and gain performance improvements without diving into the intricacies of kernel development right away.</p>
+<p><strong>Why AMD?</strong></p>
+<p>Because AMD is awesome! While there are an abundance of CUDA (NVIDIA) resources available online, there are fewer guides for programming on AMD GPUs, and we wanted to fill that gap. AMD’s ROCm platform provides a complete environment for GPU programming, and this blog aims to showcase how to effectively use just a small piece of the ROCm toolkit. Lastly, working with AMD GPUs also broadens a wider  understanding of GPU programming by moving beyond the prevalent NVIDIA-centric approach in the industry.</p>
+</section>
+<section id="gpu-matrix-multiplication-with-rocblas">
+<h2>GPU Matrix Multiplication with rocBLAS<a class="headerlink" href="#gpu-matrix-multiplication-with-rocblas" title="Link to this heading">¶</a></h2>
+<p>Writing efficient GPU kernels involves managing memory access patterns, synchronization, and the coordination of thousands of parallel threads to fully exploit modern GPU architectures. For matrix multiplication, using an optimized library like rocBLAS simplifies this process by providing a range of APIs that abstract away much of the complexity. This allows developers to take advantage of GPU computation without needing to manually manage the intricacies of kernel development.</p>
+<p>rocBLAS contains numerous optimized linear algebra routines tailored for AMD GPUs. In this section, we will focus on a single function, <cite>sgemm</cite>, which handles single precision (fp32) matrix multiplication. This function represents a small part of the larger rocBLAS library, which is designed to optimize performance while minimizing the need for low-level management of GPU operations. By leveraging rocBLAS, developers can achieve high performance for matrix multiplication in C without the overhead of manual GPU feature management.</p>
+<section id="matrix-multiplication-formulas">
+<h3><em>Matrix Multiplication Formulas</em><a class="headerlink" href="#matrix-multiplication-formulas" title="Link to this heading">¶</a></h3>
+<p>Let’s start with the basic matrix multiplication formula. Consider three matrices A, B, and C with the following dimensions:</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}A &amp;= m \times k \\
+B &amp;= k \times n \\
+C &amp;= m \times n\end{split}\]</div>
+<p>The matrix multiplication of A and B resulting in C can be expressed as:</p>
+<div class="math notranslate nohighlight">
+\[C = A \cdot B\]</div>
+<p>On an element-wise level, this operation can be written as:</p>
+<div class="math notranslate nohighlight">
+\[c_{ij} = \sum_{p=1}^k a_{ip} b_{pj}\]</div>
+<p>Here, <span class="math notranslate nohighlight">\(c_{ij}\)</span> represents the element in the i-th row and j-th column of C, calculated by taking the dot product of the i-th row of A and the j-th column of B. The indices i, j, and p range from 1 to m, n, and k respectively.</p>
+<p>This formula demonstrates how each element of the resulting matrix C is computed through a series of multiplications and additions, utilizing corresponding elements from matrices A and B.</p>
+<p>While this basic formula is fundamental, many advanced linear algebra libraries, including rocBLAS, use a more sophisticated formula for their General Matrix Multiplication (GEMM) routine. This enhanced formula provides greater flexibility and efficiency in matrix computations.</p>
+<p>The rocBLAS GEMM formula can be expressed as:</p>
+<div class="math notranslate nohighlight">
+\[C = \alpha \cdot \text{op}(A) \cdot \text{op}(B) + \beta \cdot C\]</div>
+<p>Or in element-wise form:</p>
+<div class="math notranslate nohighlight">
+\[c_{ij} = \alpha \cdot \sum_{p=1}^k \text{op}(a)_{ip} \cdot \text{op}(b)_{pj} + \beta \cdot c_{ij}\]</div>
+<p>These formulas might look intimidating at first, but let’s break them down:</p>
+<ul class="simple">
+<li><p><strong>C on both sides:</strong> The <span class="math notranslate nohighlight">\(C\)</span> on the right side represents the initial values in the result matrix. This allows for updating existing values instead of starting from scratch, useful in algorithms that build up results over multiple steps. The final step adds this scaled original C (<span class="math notranslate nohighlight">\(\beta \cdot C\)</span>) to the new multiplication result.</p></li>
+<li><p><strong>α and β:</strong> These scalar values adjust the importance of different parts of the calculation. Think of them as volume knobs - <span class="math notranslate nohighlight">\(\alpha\)</span> controls the contribution of the new multiplication (A·B), while <span class="math notranslate nohighlight">\(\beta\)</span> determines how much of the original C to retain. This allows for fine-tuning the balance between new and existing calculations.</p></li>
+<li><p><strong>op(A) and op(B):</strong> The <span class="math notranslate nohighlight">\(\text{op}()\)</span> function allows for matrix transposition without creating a new matrix. It either leaves the matrix as-is or treats it as if it were transposed, depending on the operation needed.  Transposition within the rocBLAS GEMM has performance implications that we typically try to avoid by transposing matrices where required prior to calling the GEMM API.</p></li>
+</ul>
+<p>This formula offers greater flexibility than the basic matrix multiplication:</p>
+<ul class="simple">
+<li><p><strong>Memory efficiency</strong>:
+By using <span class="math notranslate nohighlight">\(\text{op}()\)</span>, it avoids creating new copies of transposed matrices, saving memory allocations and reducing data movement when required.</p></li>
+<li><p><strong>Computational versatility</strong>:
+The <span class="math notranslate nohighlight">\(\alpha\)</span> and <span class="math notranslate nohighlight">\(\beta\)</span> parameters enable a wide range of operations beyond simple multiplication, such as blending results from multiple calculations or performing iterative updates in complex algorithms.</p></li>
+</ul>
+<p>Although this formula is valuable in scientific computing and specialized machine learning, typical deep learning scenarios often use simplified versions. For standard neural network operations:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(\alpha\)</span> is usually set to 1 since we want to scale the result of the matrix multiplication directly without any changes.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\beta\)</span> is typically 0 because we often ignore any pre-existing values in the output matrix, focusing only on the new result. In some cases, such as gradient accumulation during backpropagation, <span class="math notranslate nohighlight">\(\beta\)</span> may be set to 1 (or other values) to retain and add to previous values.</p></li>
+</ul>
+<p>The rocBLAS GEMM formula extends basic matrix multiplication with flexible operations and scaling factors, allowing efficient handling of transposed matrices and in-place updates. While it offers broad capabilities for scientific computing, deep learning commonly uses simplified versions with α set to 1 and β to 0 or 1, depending on the operation.</p>
+</section>
+<section id="rocblas-sgemm-api">
+<h3><em>rocBLAS SGEMM API</em><a class="headerlink" href="#rocblas-sgemm-api" title="Link to this heading">¶</a></h3>
+<p>The <cite>rocblas_sgemm</cite> function in the rocBLAS library performs single-precision floating-point matrix multiplication (SGEMM). Here’s a breakdown of its key components for those unfamiliar with GPU programming:</p>
+<ul class="simple">
+<li><p><strong>handle</strong>: A <cite>rocblas_handle</cite> manages the internal state and resources of the rocBLAS library and is created with <cite>rocblas_create_handle()</cite> before performing any operations.</p></li>
+<li><p><strong>transA</strong>, <strong>transB</strong>: These parameters specify whether matrices A and B should be transposed before multiplication. Use <cite>rocblas_operation_none</cite> for no transpose or <cite>rocblas_operation_transpose</cite> to transpose the matrix.</p></li>
+<li><p><strong>m</strong>, <strong>n</strong>, <strong>k</strong>: These define the dimensions of the matrices. <cite>m</cite> and <cite>n</cite> are the rows and columns of matrix C (the result), while <cite>k</cite> is the shared dimension between A and B.</p></li>
+<li><p><strong>alpha</strong>, <strong>beta</strong>: These scalar values control how the result of <cite>A * B</cite> is combined with matrix C. <cite>alpha</cite> scales <cite>A * B</cite>, and <cite>beta</cite> scales any existing values in matrix C.</p></li>
+<li><p><strong>A</strong>, <strong>B</strong>, <strong>C</strong>: These are <strong>pointers to the matrices in GPU memory</strong>. The matrices (A, B, and C) exist on the host initially, but they must be copied to the GPU using device pointers (<cite>d_A</cite>, <cite>d_B</cite>, <cite>d_C</cite>). These device pointers are passed to <cite>rocblas_sgemm</cite>, not the host pointers.</p></li>
+<li><p><strong>lda</strong>, <strong>ldb</strong>, <strong>ldc</strong>: These are the leading dimensions of matrices A, B, and C, which define the stride between rows or columns, ensuring proper memory layout.</p></li>
+</ul>
+<p>Here’s a high-level code snippet showing how to call <cite>rocblas_sgemm</cite>:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">rocblas_sgemm</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span>
+<span class="w">              </span><span class="n">transA</span><span class="p">,</span><span class="w"> </span><span class="n">transB</span><span class="p">,</span>
+<span class="w">              </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span>
+<span class="w">              </span><span class="o">&amp;</span><span class="n">alpha</span><span class="p">,</span>
+<span class="w">              </span><span class="n">d_A</span><span class="p">,</span><span class="w"> </span><span class="n">lda</span><span class="p">,</span>
+<span class="w">              </span><span class="n">d_B</span><span class="p">,</span><span class="w"> </span><span class="n">ldb</span><span class="p">,</span>
+<span class="w">              </span><span class="o">&amp;</span><span class="n">beta</span><span class="p">,</span>
+<span class="w">              </span><span class="n">d_C</span><span class="p">,</span><span class="w"> </span><span class="n">ldc</span><span class="p">);</span>
+
+<span class="c1">// where:</span>
+<span class="c1">// handle:     rocblas_handle managing the rocBLAS context.</span>
+<span class="c1">// transA/B:   rocblas_operation_none (no transpose) or rocblas_operation_transpose (use the transposed matrix).</span>
+<span class="c1">// m, n, k:    Matrix dimensions; m = rows of C, n = cols of C, k = shared dimension of A and B.</span>
+<span class="c1">// alpha:      Scalar pointer, scales A * B.</span>
+<span class="c1">// d_A, d_B:       Pointers to matrices A and B in GPU memory.</span>
+<span class="c1">// lda/ldb:    Leading dimensions of A and B (stride between rows/cols).</span>
+<span class="c1">// beta:       Scalar pointer, scales existing values in C.</span>
+<span class="c1">// d_C:          Pointer to output matrix C in GPU memory.</span>
+<span class="c1">// ldc:        Leading dimension of matrix C.</span>
+</pre></div>
+</div>
+<p>Using this API, you can perform complex matrix multiplications with a single function call, taking advantage of rocBLAS’s optimized implementation for AMD GPUs.</p>
+</section>
+<section id="from-formulas-to-implementation">
+<h3><em>From Formulas to Implementation</em><a class="headerlink" href="#from-formulas-to-implementation" title="Link to this heading">¶</a></h3>
+<p>Our project code demonstrates two approaches to implementing GPU-accelerated matrix multiplication, both leveraging the GEMM formula and rocBLAS:</p>
+<p><a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul/blob/main/pytorch/pytorch_matmul.py">PyTorch Implementation</a>:
+PyTorch’s <code class="docutils literal notranslate"><span class="pre">torch.matmul</span></code> function simplifies GPU programming by abstracting the complexities of the rocBLAS API (assuming PyTorch is installed with ROCm support). It internally uses the GEMM formula and rocBLAS on AMD GPUs, automatically managing memory allocation, data transfers, and API calls. This high-level approach allows developers to focus on algorithm design without dealing with low-level GPU details.</p>
+<p><a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul/blob/main/c/src/main.c">Direct C Implementation with rocBLAS</a>:
+Our C implementation directly interfaces with the rocBLAS API, providing greater control over the entire computation process. In this case, we manually handle rocBLAS API calls, GPU memory management, and matrix operations. We translate the GEMM formula:</p>
+<p><span class="math notranslate nohighlight">\(C = \alpha \cdot \text{op}(A) \cdot \text{op}(B) + \beta \cdot C\)</span></p>
+<p>into the following rocBLAS function call:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">CHECK_ROCBLAS</span><span class="p">(</span><span class="n">rocblas_sgemm</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span>
+<span class="w">                            </span><span class="n">rocblas_operation_none</span><span class="p">,</span><span class="w"> </span><span class="n">rocblas_operation_none</span><span class="p">,</span>
+<span class="w">                            </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">alpha</span><span class="p">,</span><span class="w"> </span><span class="n">d_A</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="n">d_B</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">beta</span><span class="p">,</span><span class="w"> </span><span class="n">d_C</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">));</span>
+</pre></div>
+</div>
+<p>In this example, matrices <cite>A</cite>, <cite>B</cite>, and <cite>C</cite> are initially in host memory and need to be <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul/blob/12a4b4cad727afe1b0fe2cb633933d4af1cfaab1/c/src/timer.c#L4">moved to GPU memory</a> as <cite>d_A</cite>, <cite>d_B</cite>, and <cite>d_C</cite>. These device pointers are then passed to the <cite>rocblas_sgemm</cite> function instead of the host pointers.</p>
+<p>We work with square matrices of size N x N, which is why we use ‘N’ for the dimensions in the rocBLAS API call. Similarly, the leading dimensions <cite>lda</cite>, <cite>ldb</cite>, and <cite>ldc</cite> are all set to ‘N’ since the matrices are stored contiguously.</p>
+<p>To optimize performance, we transpose matrices A and B before passing them to GEMM. While matrices in C are typically initialized in row-major order, rocBLAS performs better with column-major order. We use a separate function to handle the transposition, as this consistently outperforms using the transpose flags during the <cite>rocblas_sgemm</cite> call.</p>
+<p>Key variables in the API call:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">handle</span></code>: The rocBLAS library handle.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">rocblas_operation_none</span></code>: Specifies no transposition for input matrices.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">N</span></code>: The dimensions of our square matrices.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alpha</span></code> and <code class="docutils literal notranslate"><span class="pre">beta</span></code>: Scalar multipliers in the GEMM formula.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">d_A</span></code>, <code class="docutils literal notranslate"><span class="pre">d_B</span></code>, <code class="docutils literal notranslate"><span class="pre">d_C</span></code>: Pointers to device (GPU) memory for matrices A, B, and C.</p></li>
+</ul>
+<p>The GEMM formula serves as the foundation for both our PyTorch and C implementations. PyTorch abstracts the complexity of GPU programming, enabling rapid development, while our C implementation offers finer control, demonstrating performance improvements by pre-transposing matrices. These approaches illustrate how the same underlying formula can be applied across different programming paradigms to meet specific performance needs in GPU-accelerated matrix multiplication.</p>
+</section>
+</section>
+<section id="matrix-setup-and-code-breakdown">
+<h2>Matrix Setup and Code Breakdown<a class="headerlink" href="#matrix-setup-and-code-breakdown" title="Link to this heading">¶</a></h2>
+<section id="matrix-setup-for-benchmarking">
+<h3>Matrix Setup For Benchmarking<a class="headerlink" href="#matrix-setup-for-benchmarking" title="Link to this heading">¶</a></h3>
+<p>Our matrix multiplication operates on square matrices <cite>A</cite> and <cite>B</cite>, both of size N × N. For benchmarking, we’ve set N to 16,384, which provides a significant workload to demonstrate GPU performance. This configuration is defined using a preprocessor macro (<code class="docutils literal notranslate"><span class="pre">#define</span> <span class="pre">N</span> <span class="pre">16384</span></code>), enabling consistent behavior and compiler optimizations.</p>
+<p>With N = 16,384, each matrix has 268,435,456 elements. Using 32-bit floating-point precision (FP32), the size of each matrix is:</p>
+<div class="math notranslate nohighlight">
+\[268,435,456 \times 4 \text{ bytes} = 1,073,741,824 \text{ bytes} \approx 1.07 \text{ GB}\]</div>
+<p>Thus, the total memory requirement for three matrices (A, B, and C) is around 3.21 GB.</p>
+<p>The computation involved in multiplying two matrices of this size is intensive. The total number of floating-point operations (FLOPs) required is:</p>
+<div class="math notranslate nohighlight">
+\[\text{Total FLOPs} = 2N^3 = 2 \times 16,384^3 = 8,796,093,022,208 \approx 8.8 \text{ TFLOPs}\]</div>
+<p>It’s important to note that our benchmarks focus solely on the GPU performance during matrix multiplication. We are <strong>not</strong> including the time spent on matrix initialization, the transfer of matrices between host and device memory, or the transfer of results back to the host. This isolation ensures a more accurate representation of the GPU’s computational performance.</p>
+<p>We conducted benchmarks on a system with dual AMD EPYC 7713 64-Core Processors, 1 TB RAM, and a single AMD MI250 GPU to handle the matrix multiplication. Although the CPU handles tasks like matrix initialization and transposition, the benchmarks focus exclusively on the GPU’s contribution during the matrix multiplication phase. This approach allows us to achieve consistent comparisons between different implementations, reporting the achieved TFLOPs for the multiplication step.</p>
+</section>
+<section id="project-structure-and-code-organization">
+<h3>Project Structure and Code Organization<a class="headerlink" href="#project-structure-and-code-organization" title="Link to this heading">¶</a></h3>
+<p>Our project includes both a low-level C implementation using rocBLAS and a high-level PyTorch implementation, enabling a clear comparison between the two approaches.</p>
+<p>In the C implementation, the code is divided into the following key components:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">main.c</span></code>: Contains the primary logic for benchmarking and running the multiplication.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">matrix_operations.c</span></code>: Implements the matrix multiplication logic using rocBLAS.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">utils.c</span></code>: Provides functions for memory management and data initialization.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">timer.c</span></code>: Includes functions for accurate timing of matrix operations.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">spot_check.c</span></code>: Verifies the correctness of the matrix multiplication results.</p></li>
+</ul>
+<p>Header files in the <code class="docutils literal notranslate"><span class="pre">include/</span></code> directory define the interfaces for these components, ensuring modularity and reusability.</p>
+<p>The PyTorch implementation is contained in a single file, <code class="docutils literal notranslate"><span class="pre">pytorch_matmul.py</span></code>, which abstracts away the complexities of GPU memory management and API calls. This high-level framework simplifies the process of performing matrix multiplication on GPUs, making development faster and more convenient.</p>
+<p>The project structure highlights the trade-offs between the detailed control offered by the C implementation and the simplicity and ease of PyTorch. Both approaches utilize GPU acceleration, but they offer different levels of flexibility depending on the user’s needs.</p>
+</section>
+</section>
+<section id="pytorch-implementation-abstracting-rocblas">
+<h2>PyTorch Implementation: Abstracting rocBLAS<a class="headerlink" href="#pytorch-implementation-abstracting-rocblas" title="Link to this heading">¶</a></h2>
+<section id="key-implementation-details">
+<h3>Key Implementation Details<a class="headerlink" href="#key-implementation-details" title="Link to this heading">¶</a></h3>
+<p>The PyTorch implementation showcases the simplicity of using a high-level framework for GPU-accelerated matrix multiplication. In this approach, rocBLAS is abstracted away, allowing us to focus on the core computation without dealing with low-level GPU programming details.</p>
+</section>
+<section id="matrix-setup">
+<h3>Matrix Setup<a class="headerlink" href="#matrix-setup" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">N</span> <span class="o">=</span> <span class="mi">16384</span>
+<span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cuda:</span><span class="si">{</span><span class="n">gpu_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">uniform_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">B</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">uniform_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This code initializes two 16384x16384 matrices with random values directly on the GPU by specifying the <cite>device=device</cite> argument. PyTorch internally handles allocating and transferring these matrices to the GPU, so <cite>A</cite> and <cite>B</cite> reside in GPU memory right from the start. No explicit host-to-device memory transfer is needed, as would be required in lower-level frameworks.</p>
+</section>
+<section id="matrix-multiplication">
+<h3>Matrix Multiplication<a class="headerlink" href="#matrix-multiplication" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This single line performs the entire matrix multiplication operation, leveraging PyTorch’s optimized backend (which uses rocBLAS for AMD GPUs).</p>
+</section>
+<section id="flops-calculation">
+<h3>FLOPS Calculation<a class="headerlink" href="#flops-calculation" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<span class="n">run_time</span> <span class="o">=</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span>
+<span class="n">tflops</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">N</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span> <span class="n">run_time</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1e12</span>
+</pre></div>
+</div>
+<p>To accurately measure <cite>run_time</cite>, we use <cite>torch.cuda.synchronize()</cite> to ensure that the matrix multiplication is fully completed on the GPU before and after calling <cite>torch.matmul</cite>. This prevents asynchronous execution from affecting the timing. We use <cite>time.perf_counter()</cite> from the Python standard library for high-resolution timing, but it must be combined with GPU synchronization to reflect only the time spent on the actual computation, not the queuing of operations.</p>
+</section>
+<section id="benchmark-strategy">
+<h3>Benchmark Strategy<a class="headerlink" href="#benchmark-strategy" title="Link to this heading">¶</a></h3>
+<p>The benchmark runs the matrix multiplication 25 times to get a stable performance number. The first run is typically slower because PyTorch needs to load and compile the rocBLAS kernel. Subsequent runs benefit from this initialization and show more consistent performance.</p>
+</section>
+<section id="results-summary">
+<h3>Results Summary<a class="headerlink" href="#results-summary" title="Link to this heading">¶</a></h3>
+<p>The benchmark results show:</p>
+<ul class="simple">
+<li><p>First run: 1.74 TFLOPS (5.066478 seconds)</p></li>
+<li><p>Subsequent runs: Consistently around 37.5 TFLOPS (0.234 seconds)</p></li>
+</ul>
+<p>Example output:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Run     Time (s)        TFLOPS
+------------------------------
+1       5.066478        1.74
+2       0.234706        37.48
+3       0.234577        37.50
+...
+25      0.234543        37.50
+</pre></div>
+</div>
+<p>The stark difference between the first run and subsequent runs clearly demonstrates the overhead of initializing the GPU kernel. After initialization, we see stable performance at about 37.5 TFLOPS, showcasing the impressive computational capabilities of the AMD Instinct MI250X GPU for large-scale matrix multiplication tasks.</p>
+<p>This PyTorch implementation demonstrates how high-level frameworks can abstract away the complexities of GPU programming while still delivering excellent performance for computational tasks like matrix multiplication.</p>
+</section>
+</section>
+<section id="c-implementation-direct-rocblas-integration">
+<h2>C Implementation: Direct rocBLAS Integration<a class="headerlink" href="#c-implementation-direct-rocblas-integration" title="Link to this heading">¶</a></h2>
+<section id="id1">
+<h3>Key Implementation Details<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
+<p>The C implementation provides a lower-level approach, directly integrating with rocBLAS for GPU-accelerated matrix multiplication. This method offers more control over the computation process but requires more detailed management of GPU resources.</p>
+</section>
+<section id="id2">
+<h3>Matrix Setup<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<p>In the C implementation, we manually handle both the allocation of memory and the transfer of matrices between the host (CPU) and device (GPU). The following code shows how we allocate memory for the matrices and initialize them:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="kt">float</span><span class="p">);</span>
+<span class="kt">float</span><span class="w"> </span><span class="o">*</span><span class="n">h_A</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">h_B</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">h_C</span><span class="p">;</span>
+<span class="kt">float</span><span class="w"> </span><span class="o">*</span><span class="n">d_A</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">d_B</span><span class="p">,</span><span class="w"> </span><span class="o">*</span><span class="n">d_C</span><span class="p">;</span>
+
+<span class="c1">// Allocate host memory</span>
+<span class="n">h_A</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">size</span><span class="p">);</span>
+<span class="n">h_B</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">size</span><span class="p">);</span>
+<span class="n">h_C</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">float</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">size</span><span class="p">);</span>
+
+<span class="c1">// Initialize matrices</span>
+<span class="n">initialize_matrices</span><span class="p">(</span><span class="n">h_A</span><span class="p">,</span><span class="w"> </span><span class="n">h_B</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">);</span>
+
+<span class="c1">// Allocate device memory</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMalloc</span><span class="p">(</span><span class="o">&amp;</span><span class="n">d_A</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">));</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMalloc</span><span class="p">(</span><span class="o">&amp;</span><span class="n">d_B</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">));</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMalloc</span><span class="p">(</span><span class="o">&amp;</span><span class="n">d_C</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">));</span>
+
+<span class="c1">// Transfer data from host to device</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMemcpy</span><span class="p">(</span><span class="n">d_A</span><span class="p">,</span><span class="w"> </span><span class="n">h_A</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">,</span><span class="w"> </span><span class="n">hipMemcpyHostToDevice</span><span class="p">));</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMemcpy</span><span class="p">(</span><span class="n">d_B</span><span class="p">,</span><span class="w"> </span><span class="n">h_B</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">,</span><span class="w"> </span><span class="n">hipMemcpyHostToDevice</span><span class="p">));</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMemset</span><span class="p">(</span><span class="n">d_C</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">));</span>
+</pre></div>
+</div>
+<p>Unlike in PyTorch, where tensors are created directly on the GPU, in this C implementation, matrices <cite>A</cite>, <cite>B</cite>, and <cite>C</cite> are first initialized in host memory. We then allocate memory on the GPU and explicitly transfer the data from the host to the device using <cite>hipMemcpy</cite>. This step ensures that the matrices are available in GPU memory (<cite>d_A</cite>, <cite>d_B</cite>, and <cite>d_C</cite>) for the matrix multiplication operation.</p>
+</section>
+<section id="id3">
+<h3>Matrix Multiplication<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<p>In this C implementation, the matrix multiplication is performed using the <cite>rocblas_sgemm</cite> function from the rocBLAS library. This function is the low-level equivalent of PyTorch’s <cite>torch.matmul</cite>, handling the matrix multiplication on the GPU.</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">rocblas_handle</span><span class="w"> </span><span class="n">handle</span><span class="p">;</span>
+<span class="n">CHECK_ROCBLAS</span><span class="p">(</span><span class="n">rocblas_create_handle</span><span class="p">(</span><span class="o">&amp;</span><span class="n">handle</span><span class="p">));</span>
+
+<span class="c1">// Perform matrix multiplication on the GPU</span>
+<span class="n">perform_matrix_multiplication</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span><span class="w"> </span><span class="n">d_A</span><span class="p">,</span><span class="w"> </span><span class="n">d_B</span><span class="p">,</span><span class="w"> </span><span class="n">d_C</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="n">NUM_RUNS</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The <cite>rocblas_sgemm</cite> function is called within the <cite>perform_matrix_multiplication</cite> function, which executes the matrix multiplication on the GPU. This is similar to how <cite>torch.matmul</cite> abstracts the operation in PyTorch, but in the C implementation, we have explicit control over the rocBLAS API, requiring us to manually manage the GPU context and resources.</p>
+<p>Once the matrix multiplication is complete, we can retrieve the result from device memory (<cite>d_C</cite>) and transfer it back to the host (<cite>h_C</cite>) if necessary for further processing or validation.</p>
+</section>
+<section id="id4">
+<h3>FLOPS Calculation<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h3>
+<p>To calculate the FLOPS (Floating Point Operations per Second), we use the same formula as in the PyTorch implementation, based on the number of operations required for matrix multiplication: <cite>2N³</cite>, accounting for both multiplications and additions.</p>
+<p>Before measuring the runtime, we ensure that the GPU is synchronized so that the timing only includes the matrix multiplication, excluding any asynchronous overhead. Here’s how we measure <cite>run_time</cite> accurately:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="c1">// Synchronize the GPU before starting the timer</span>
+<span class="n">hipDeviceSynchronize</span><span class="p">();</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_time_in_seconds</span><span class="p">();</span>
+
+<span class="c1">// Perform matrix multiplication</span>
+<span class="n">perform_matrix_multiplication</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span><span class="w"> </span><span class="n">d_A</span><span class="p">,</span><span class="w"> </span><span class="n">d_B</span><span class="p">,</span><span class="w"> </span><span class="n">d_C</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="n">NUM_RUNS</span><span class="p">);</span>
+
+<span class="c1">// Synchronize the GPU again to ensure the multiplication has finished</span>
+<span class="n">hipDeviceSynchronize</span><span class="p">();</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">end</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_time_in_seconds</span><span class="p">();</span>
+
+<span class="kt">double</span><span class="w"> </span><span class="n">run_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">end</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>We synchronize the GPU with <cite>hipDeviceSynchronize()</cite> before and after the multiplication to ensure that the timing accurately captures the computation itself, without interference from asynchronous operations.</p>
+<p>Finally, we calculate the TFLOPS (TeraFLOPS) as:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">double</span><span class="w"> </span><span class="n">total_flops</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">N</span><span class="p">;</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">tflops</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">total_flops</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">run_time</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">1e12</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>This calculates the number of floating-point operations per second, converting the result to TFLOPS by dividing the total FLOPS by the measured runtime and scaling by 10¹² to convert to tera operations.</p>
+</section>
+<section id="id5">
+<h3>Benchmark Strategy<a class="headerlink" href="#id5" title="Link to this heading">¶</a></h3>
+<p>The benchmark runs the matrix multiplication 25 times, with the first run typically being slower due to the initial loading and compilation of the rocBLAS kernel. Subsequent runs show more consistent performance.</p>
+</section>
+<section id="id6">
+<h3>Results Summary<a class="headerlink" href="#id6" title="Link to this heading">¶</a></h3>
+<p>The benchmark results show:</p>
+<ul class="simple">
+<li><p>First run: 2.40 TFLOPS (3669.096191 ms)</p></li>
+<li><p>Subsequent runs: Consistently around 37.5 TFLOPS (234 ms)</p></li>
+</ul>
+<p>Example output:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Run 1: Matrix multiplication time: 3669.096191 ms, Performance: 2.40 TFLOPS
+Run 2: Matrix multiplication time: 234.542786 ms, Performance: 37.50 TFLOPS
+Run 3: Matrix multiplication time: 234.463577 ms, Performance: 37.52 TFLOPS
+...
+Run 25: Matrix multiplication time: 234.464218 ms, Performance: 37.52 TFLOPS
+</pre></div>
+</div>
+<p>The performance difference between the first and subsequent runs demonstrates the overhead of initializing the GPU kernel. After initialization, we see stable performance at about 37.5 TFLOPS, matching the performance of the PyTorch implementation.</p>
+</section>
+<section id="accuracy-verification">
+<h3>Accuracy Verification<a class="headerlink" href="#accuracy-verification" title="Link to this heading">¶</a></h3>
+<p>In contrast to PyTorch, which abstracts many aspects of GPU computations and typically assumes correct results based on its built-in framework, the C implementation requires explicit verification of the accuracy of the results. PyTorch does not expose the underlying operations as directly, but due to the rigorous testing and use of highly optimized libraries like rocBLAS, it is generally trusted to produce accurate results without the need for manual spot checks. However, in our low-level C implementation, it’s important to verify the results ourselves to ensure correctness.</p>
+<p>After completing the matrix multiplication on the GPU and transferring the result matrix <cite>C</cite> back to the host, we must <strong>transpose the result matrix</strong> before performing any accuracy checks. This is because <a class="reference external" href="https://rocm.docs.amd.com/projects/rocBLAS/en/docs-5.7.1/API_Reference_Guide.html#introduction">rocBLAS</a> returns the result in <strong>column-major order</strong>, while our matrix operations expect the data in <strong>row-major order</strong>, as is typical in C programs. Here’s how the verification process is handled:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="c1">// Transfer the result matrix C back from the GPU to the host</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMemcpy</span><span class="p">(</span><span class="n">h_C</span><span class="p">,</span><span class="w"> </span><span class="n">d_C</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">,</span><span class="w"> </span><span class="n">hipMemcpyDeviceToHost</span><span class="p">));</span>
+
+<span class="c1">// Transpose the result matrix from column-major to row-major order</span>
+<span class="n">transpose_matrix</span><span class="p">(</span><span class="n">h_C_trans</span><span class="p">,</span><span class="w"> </span><span class="n">h_C</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">);</span>
+
+<span class="c1">// Perform spot-checking for accuracy</span>
+<span class="n">spot_check</span><span class="p">(</span><span class="n">h_A</span><span class="p">,</span><span class="w"> </span><span class="n">h_B</span><span class="p">,</span><span class="w"> </span><span class="n">h_C_trans</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The <cite>spot_check</cite> function performs random comparisons between the CPU-computed results and the transposed GPU results, verifying that they match within a specified <strong>relative error threshold</strong> of <cite>1e-4</cite>. This ensures that the GPU computations are accurate and consistent with the CPU calculations.</p>
+<p>Example output confirms the accuracy:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Performing random spot checks between CPU and GPU results...
+Success: All 50 spot checks passed within the relative error threshold.
+</pre></div>
+</div>
+<p>This additional layer of verification provides confidence in the correctness of our C implementation, especially when working directly with GPU operations and memory management.</p>
+</section>
+</section>
+<section id="conclusion">
+<h2>Conclusion<a class="headerlink" href="#conclusion" title="Link to this heading">¶</a></h2>
+<p>Our exploration of GPU-accelerated matrix multiplication using AMD’s rocBLAS library demonstrated the substantial performance improvements that modern GPUs can deliver. We consistently achieved around 37.5 TFLOPS for 16384x16384 matrix multiplication, emphasizing the efficiency of GPU acceleration for large-scale computations.</p>
+<p>Both the PyTorch and C implementations produced similar performance results. This confirms that while high-level frameworks like PyTorch simplify the process, low-level programming with rocBLAS offers comparable efficiency. The C implementation provided deeper control over memory management, data transfers, and kernel execution, allowing us to directly engage with GPU programming principles.</p>
+<p>The complexity of the C implementation, while more involved, offered greater insight into the mechanics of GPU computation, such as explicit memory management and accuracy verification through spot-checking. These steps provided additional confidence in the correctness of our results, particularly when working at a lower level.</p>
+<p>By moving from CPU to GPU optimization, we observed significant performance gains. Our previous CPU optimizations reached 3,000 GFLOPS, while the GPU implementation achieved 37,500 GFLOPS—a 12.5x improvement. This highlights the vast potential of GPU computing for matrix multiplication and similar computational tasks in fields such as deep learning and scientific computing.</p>
+<p>Thanks for reading! For more details, check out our <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul">gpu_matmul GitHub repo</a>. Stay tuned for future blogs where we’ll dive deeper into GPU optimizations and explore more advanced topics in high-performance computing.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">gpu_matmul</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Pebbles and Weeds.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.0.2</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/gpu_matmul_blog.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
