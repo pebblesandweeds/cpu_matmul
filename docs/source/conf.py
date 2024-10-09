@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'CPU Matrix Multiplication'
+project = 'Pebbles and Weeds Blog'
 copyright = '2024, Pebbles and Weeds'
 author = 'Pebbles and Weeds'
 release = '1.0'
