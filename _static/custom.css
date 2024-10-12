@@ -67,3 +67,11 @@ code {
     padding: 2px 4px;
     font-size: 90%;
 }
+
+/* Make the sidebar fixed */
+div.sphinxsidebar {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+}
