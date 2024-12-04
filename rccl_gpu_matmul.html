@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS &#8212; rccl_gpu_matmul  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=c058f7c8" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="rccl_gpu_matmul documentation" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="scaling-matrix-multiplication-across-multiple-amd-gpus-with-rccl-and-rocblas">
+<h1>Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS<a class="headerlink" href="#scaling-matrix-multiplication-across-multiple-amd-gpus-with-rccl-and-rocblas" title="Link to this heading">¶</a></h1>
+<div class="admonition-highlights admonition">
+<p class="admonition-title">Highlights</p>
+<p>Scaling matrix multiplication beyond a single GPU presents both opportunities and challenges in deep learning. This blog post demonstrates how to scale our <a class="reference external" href="https://blog.pebblesandweeds.com/gpu_matmul_blog.html">previous single-GPU implementation</a> to efficiently utilize multiple GPUs in a single server through AMD’s RCCL library, showing how coordination of communication and computation can achieve near-linear performance scaling.</p>
+<ul class="simple">
+<li><p><strong>Scaling Efficiency</strong>: Using baseline performance from our previous single-GPU implementation, we achieve equivalent per-GPU throughput when distributed across 8 GPUs (~35 TFLOPS per GPU, ~280 TFLOPS aggregate). This demonstrates that RCCL’s communication primitives impose minimal overhead, as each GPU maintains the baseline performance while coordinating through broadcast and allGather operations.</p></li>
+<li><p><strong>Memory Distribution</strong>: We performed multiplication of 32,768 x 32,768 single precision matrices by horizontally chunking matrix A across eight (8) GPUs while broadcasting matrix B. This reduces per-GPU memory requirements from 12.87 GB to ~5.36 GB while enabling parallel computation of the results.</p></li>
+<li><p><strong>RCCL Communication</strong>: Implemented single-host, multi-GPU coordination through RCCL collective operations, broadcasting matrix B across GPUs and combining partial results through allGather. These high-level primitives handle the complex low-level details of efficient inter-GPU data transfer.</p></li>
+<li><p><strong>PyTorch Validation</strong>: Implemented simple distributed <a class="reference external" href="https://github.com/pebblesandweeds/rccl_gpu_matmul/blob/dev/pytorch/pytorch_rccl.py">Pytorch</a> code using torch.distributed primitives that achieved matching multi-GPU performance (34.6-35.7 TFLOPS per GPU), validating our low-level C and RCCL implementation against PyTorch’s established distributed computing framework.</p></li>
+</ul>
+<p>This implementation demonstrates how proper coordination between RCCL communication and rocBLAS computation enables efficient scaling across multiple GPUs while maintaining high performance. Our C implementation provides insight into distributed GPU computing concepts while achieving performance parity with PyTorch’s optimized framework.</p>
+</div>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">¶</a></h2>
+<p>In our <a class="reference external" href="https://blog.pebblesandweeds.com/gpu_matmul_blog.html">previous blog post</a>, we implemented matrix multiplication in C using AMD’s <a class="reference external" href="https://rocm.docs.amd.com/projects/rocBLAS/en/latest/">rocBLAS</a> library, specifically utilizing the <a class="reference external" href="https://rocm.docs.amd.com/projects/rocBLAS/en/latest/reference/level-3.html#rocblas-xgemm-batched-strided-batched">rocblas_sgemm</a> API to leverage AMD’s fast GPU <a class="reference external" href="https://www.amd.com/en/technologies/cdna.html">matrix cores</a>. The implementation demonstrated that carefully written C code using rocBLAS could match PyTorch’s highly optimized matrix operations, allowing us to achieve the same performance with a lower-level implementation.</p>
+<p>While our previous work focused on single-GPU matrix multiplication, this operation is inherently parallelizable - computations can be efficiently distributed across multiple GPUs with minimal dependencies between parallel tasks. Modern servers and supercomputers systems support this parallelism by providing multiple GPUs per node, enabling significant computational speedups through parallel execution. While our <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul">single-GPU implementation</a> demonstrated basic rocBLAS capabilities, the parallel nature of matrix multiplication makes it an ideal candidate for multi-GPU execution.</p>
+<p>This post extends our previous work by distributing matrix multiplication across multiple GPUs within a single host using <a class="reference external" href="https://github.com/ROCmSoftwarePlatform/rccl">RCCL</a> (ROCm Communication Collectives Library). <a class="reference external" href="https://rocm.docs.amd.com/projects/rccl/en/latest/">RCCL provides</a> efficient communication primitives between GPUs, similar to NVIDIA’s NCCL, enabling us to coordinate computation across all available devices to maximize hardware utilization and computational throughput. Our goal is to show how to extend our single-GPU rocBLAS implementation in C to utilize RCCL for coordinating matrix multiplication across multiple GPUs in a single host system.</p>
+</section>
+<section id="scaling-matrix-multiplication-from-single-to-multi-gpu-systems">
+<h2>Scaling Matrix Multiplication: From Single to Multi-GPU Systems<a class="headerlink" href="#scaling-matrix-multiplication-from-single-to-multi-gpu-systems" title="Link to this heading">¶</a></h2>
+<section id="single-gpu-matrix-multiplication">
+<h3>Single-GPU Matrix Multiplication<a class="headerlink" href="#single-gpu-matrix-multiplication" title="Link to this heading">¶</a></h3>
+<p>The rocBLAS <code class="docutils literal notranslate"><span class="pre">rocblas_sgemm</span></code> API implements high-performance single precision (fp32) matrix multiplication using AMD’s matrix core accelerators (detailed formula and optimizations are covered in our <a class="reference external" href="https://blog.pebblesandweeds.com/gpu_matmul_blog.html#matrix-multiplication-formulas">previous post</a>). The core workflow involves transferring input matrices A and B to GPU memory, executing the multiplication, and transferring result matrix C back to host memory.</p>
+<p>While this appears straightforward, achieving peak performance requires careful orchestration of memory transfers, matrix layouts, and compute scheduling. Thankfully, rocBLAS abstracts away many of these complexities - it handles matrix padding and alignment to maximize memory throughput, manages optimal blocking strategies for AMD’s matrix cores, and provides batching capabilities for efficient execution of multiple multiplications. This allows developers to focus on high-level algorithm design while the library manages the hardware-specific optimizations.</p>
+<p>Even though this single-GPU approach delivers good performance for matrices that fit within GPU memory, it is ultimately constrained by both memory capacity and computational throughput of a single device. A modern GPU can deliver impressive TFLOP/s for matrix operations, but most AI workloads demand higher computational capabilities than a single GPU can deliver. These performance demands, combined with memory limitations, motivate exploration of multi-GPU approaches that can harness both the aggregate compute power and memory capacity of multiple devices.</p>
+<figure class="align-center" id="id2">
+<img alt="Single GPU Matrix Multiplication Workflow" src="_images/single-gpu-flow.png" />
+<figcaption>
+<p><span class="caption-text">Simple matrix multiplication on single GPU</span><a class="headerlink" href="#id2" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="distributed-matrix-multiplication">
+<h3>Distributed Matrix Multiplication<a class="headerlink" href="#distributed-matrix-multiplication" title="Link to this heading">¶</a></h3>
+<p>Extending beyond a single device, we can leverage multiple GPUs within a host system to dramatically increase both computational throughput and available memory. The key lies in efficiently partitioning the workload while minimizing data transfers between devices.</p>
+<p>Our distributed implementation employs a horizontal partitioning strategy that balances computational efficiency with communication overhead through several key mechanisms:</p>
+<ul class="simple">
+<li><p><strong>Matrix Distribution</strong> - Matrix A is split horizontally across GPUs while matrix B is broadcast in its entirety to each device using RCCL, allowing independent processing of matrix partitions using rocBLAS primitives.</p></li>
+<li><p><strong>Result Consolidation</strong>: The system combines partial results from each device through RCCL’s allGather operation, constructing the final output matrix</p></li>
+<li><p><strong>Performance Optimization</strong>: The approach maximizes efficiency through balanced computational load from the horizontal split of A, minimizing inter-GPU communication through a single broadcast of B, and requiring only one collective operation during result collection via allGather</p></li>
+</ul>
+<p>Through these design choices, we transform our earlier single-GPU implementation into a scalable distributed system that preserves the computational efficiency of rocBLAS while extending across multiple devices.</p>
+<figure class="align-center" id="id3">
+<img alt="Distributed Matrix Multiplication Workflow" src="_images/matmul_rccl_workflow.png" />
+<figcaption>
+<p><span class="caption-text">Distributed matrix multiplication across multiple GPUs</span><a class="headerlink" href="#id3" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p>Broadcasting matrix B instead of partitioning it optimizes our approach for deep learning workloads. While this requires more memory per GPU, it significantly reduces communication overhead based on how matrices A and B are used in practice:</p>
+<ul class="simple">
+<li><p>Matrix B contains model weights that remain constant across many computations</p></li>
+<li><p>Matrix A holds the activations or embeddings that change with each forward pass</p></li>
+<li><p>Matrix multiplication requires each row of A to interact with every column of B. Partitioning B by columns would force GPUs to exchange partial results, since computing a single output row needs access to all of B’s columns</p></li>
+</ul>
+<p>Given modern GPU memory capacities and the characteristic reuse of parameter matrices in deep learning workloads, the higher memory cost of broadcasting B is outweighed by the reduced communication overhead.</p>
+</section>
+</section>
+<section id="implementing-multi-gpu-matrix-multiplication">
+<h2>Implementing Multi-GPU Matrix Multiplication<a class="headerlink" href="#implementing-multi-gpu-matrix-multiplication" title="Link to this heading">¶</a></h2>
+<section id="implementation-libraries">
+<h3>Implementation Libraries<a class="headerlink" href="#implementation-libraries" title="Link to this heading">¶</a></h3>
+<p>Our implementation leverages two core AMD libraries:</p>
+<p><strong>rocBLAS for Matrix Computation</strong></p>
+<p>The <code class="docutils literal notranslate"><span class="pre">rocblas_sgemm</span></code> API handles matrix multiplication on each GPU. We covered the single-GPU implementation in our <a class="reference external" href="https://blog.pebblesandweeds.com/gpu_matmul_blog.html#rocblas-sgemm-api">previous blog</a>, the multi-GPU version works similarly - each device executes its own matrix multiplication after receiving its portion of matrix A and a complete copy of matrix B. rocBLAS optimizes these computations for AMD’s matrix cores, managing memory layouts and compute scheduling automatically.</p>
+<p><strong>RCCL for GPU Communication</strong></p>
+<p>RCCL (ROCm Communication Collectives Library) provides efficient primitives for moving data between GPUs. While this is AMD’s library, it maintains API compatibility with NVIDIA’s NCCL - hence the <code class="docutils literal notranslate"><span class="pre">nccl</span></code> prefix in function names like <code class="docutils literal notranslate"><span class="pre">ncclBroadcast</span></code>. Our implementation uses two key RCCL operations:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ncclBroadcast</span></code> distributes matrix B to all GPUs during initialization</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ncclAllGather</span></code> combines partial results from each GPU’s computation into the final output matrix</p></li>
+</ul>
+<p>RCCL handles the complexity of optimal data transfer paths between GPUs, utilizing direct GPU-to-GPU communication when available and automatically selecting the most efficient transfer methods based on system topology.</p>
+<p>The interaction between these libraries follows a clear pattern: RCCL first distributes the input data across devices, rocBLAS performs local computations on each GPU, and finally RCCL consolidates the results. This separation of tasks - RCCL for communication and rocBLAS for computation - allows each library to optimize its specific role while working together for efficient distributed processing.</p>
+</section>
+<section id="memory-requirements">
+<h3>Memory Requirements<a class="headerlink" href="#memory-requirements" title="Link to this heading">¶</a></h3>
+<p>Let’s examine the memory distribution patterns across GPUs in our matrix multiplication implementation. For this discussion, we’ll use 32K × 32K matrices with single precision floating point values (fp32, 4 bytes per element). Each complete matrix occupies:</p>
+<div class="math notranslate nohighlight">
+\[32,768 \times 32,768 \times 4 \text{ bytes} \approx 4.29 \text{ GB}\]</div>
+<p>While modern enterprise GPUs can handle much larger matrices, this size provides a practical example for demonstrating how distributed computation reduces memory requirements per device.</p>
+<p><strong>Single-GPU Memory Footprint</strong></p>
+<p>When running matrix multiplication on a single GPU using rocBLAS, we need all three matrices to reside in device memory. With each matrix requiring 4.29 GB, our total VRAM usage is ~12.87 GB for matrices A, B, and C. While this memory footprint is within the capabilities of modern GPUs, distributing these matrices across devices we can reduce the per-GPU memory requirements, allowing us to perform larger computations and to process multiple matrix multiplications in parallel (batches).</p>
+<p><strong>Distributed Memory Layout</strong></p>
+<p>Our 8-GPU implementation reduces per-device memory usage through selective matrix distribution. Each GPU stores:</p>
+<ul class="simple">
+<li><p>1/8th chunk of matrix A: 4.29 GB ÷ 8 ≈ 536 MB</p></li>
+<li><p>Complete copy of matrix B: 4.29 GB</p></li>
+<li><p>1/8th chunk of output matrix C: 536 MB</p></li>
+</ul>
+<p>This distribution strategy requires ~5.36 GB per GPU compared to the 12.87 GB needed for single-GPU execution. The reduction stems from dividing matrices A and C across devices while broadcasting B to each GPU. While in this example our memory savings are modest, this pattern becomes increasingly important when scaling to larger matrices or processing multiple matrix multiplications in parallel.</p>
+<p>It’s worth noting that in real world deep learning applications, we typically process batches of matrix multiplications rather than single operations. While batched operations are beyond the scope of this blog post, the memory distribution strategy demonstrated here (chunking A and C while broadcasting B) provides a foundation for handling these larger workloads using less VRAM.</p>
+</section>
+<section id="rccl-implementation-considerations">
+<h3>RCCL Implementation Considerations<a class="headerlink" href="#rccl-implementation-considerations" title="Link to this heading">¶</a></h3>
+<p>When distributing matrix multiplication across multiple GPUs, several factors influence overall system performance:</p>
+<p><strong>Communication Overhead and Hardware</strong></p>
+<p>Distributing computation across multiple GPUs introduces unavoidable overhead from both communication costs and the inherent challenges of parallel workloads. While a single GPU might achieve <span class="math notranslate nohighlight">\(X\)</span> teraflops of performance, scaling to <span class="math notranslate nohighlight">\(N\)</span> GPUs will not yield <span class="math notranslate nohighlight">\(N \times X\)</span> teraflops due to these distributed computing overheads. Our goal is to minimize this scaling efficiency loss through careful management of the three main communication costs:</p>
+<ul class="simple">
+<li><p>Initial distribution of matrix chunks across devices</p></li>
+<li><p>Broadcasting matrix B to all GPUs</p></li>
+<li><p>Final gathering of results using ncclAllGather</p></li>
+</ul>
+<p>The impact of these transfers depends on the system’s GPU interconnect topology since different interconnects offer varying bandwidth and latency characteristics. PCIe and vendor-specific interconnects provide different performance tradeoffs, which RCCL leverages by automatically selecting transfer paths that minimize communication overhead based on the specific hardware topology.</p>
+<p><strong>Stream Management and Execution Flow</strong></p>
+<p>Our implementation creates independent HIP streams per GPU to manage asynchronous operations. The streams coordinate:</p>
+<ul class="simple">
+<li><p>Asynchronous memory transfers between host and device</p></li>
+<li><p>RCCL collective operations (broadcasts and gathers)</p></li>
+<li><p>rocBLAS matrix multiplication kernels</p></li>
+</ul>
+<p>The code uses RCCL’s group start end semantics to batch communication operations, with explicit synchronization through hipStreamSynchronize and hipDeviceSynchronize ensuring completion at critical points.</p>
+<p><strong>Workload Distribution Strategy</strong></p>
+<p>The implementation divides matrix A into equal-sized chunks across available GPUs, with each device processing an equal portion of rows. Matrix B is broadcast in full to all devices. Each GPU computes its portion of the final result matrix C, which is then gathered using ncclAllGather to reconstruct the complete output.</p>
+<p>Through this design, we minimize the overhead inherent in distributed computation while maximizing hardware utilization. The approach scales efficiently with additional GPUs while preserving the computational benefits of rocBLAS’s optimized matrix operations on each device.</p>
+</section>
+<section id="code-walkthrough">
+<h3>Code Walkthrough<a class="headerlink" href="#code-walkthrough" title="Link to this heading">¶</a></h3>
+<p>Let’s walk through the key components of our multi-GPU matrix multiplication implementation, examining how RCCL coordination, memory management, and computation work together to achieve high performance.</p>
+<p>The first step involves setting up the RCCL context and allocating memory across our GPU array. Each GPU needs its own chunk of matrix A, a full copy of matrix B, and space for its portion of the result matrix C:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="c1">// Initialize RCCL context</span>
+<span class="n">RCCLContext</span><span class="o">*</span><span class="w"> </span><span class="n">rccl_ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rccl_init</span><span class="p">(</span><span class="n">num_gpus</span><span class="p">);</span>
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">num_gpus</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipSetDevice</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMalloc</span><span class="p">(</span><span class="o">&amp;</span><span class="n">d_A_chunks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">chunk_bytes</span><span class="p">));</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMalloc</span><span class="p">(</span><span class="o">&amp;</span><span class="n">d_B</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">full_size</span><span class="p">));</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMalloc</span><span class="p">(</span><span class="o">&amp;</span><span class="n">d_C_chunks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">chunk_bytes</span><span class="p">));</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMalloc</span><span class="p">(</span><span class="o">&amp;</span><span class="n">d_C_final</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">full_size</span><span class="p">));</span>
+<span class="w">    </span><span class="c1">// Copy data to devices</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMemcpyAsync</span><span class="p">(</span><span class="n">d_A_chunks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+<span class="w">                           </span><span class="n">h_A</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">chunk_size</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">N</span><span class="p">),</span>
+<span class="w">                           </span><span class="n">chunk_bytes</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">hipMemcpyHostToDevice</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">rccl_ctx</span><span class="o">-&gt;</span><span class="n">streams</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">CHECK_HIP</span></code> macro below wraps all HIP API calls to provide error handling. The macro checks the returned <cite>hipError_t</cite> status code and terminates execution with an error message if the operation fails:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="cp">#define CHECK_HIP(stmt) do {</span>
+<span class="w">    </span><span class="n">hipError_t</span><span class="w"> </span><span class="n">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stmt</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">hipSuccess</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">printf</span><span class="p">(</span><span class="s">&quot;HIP error: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">hipGetErrorString</span><span class="p">(</span><span class="n">err</span><span class="p">));</span>
+<span class="w">        </span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Next, we use RCCL to broadcast matrix B to all GPUs before performing our computation. The <code class="docutils literal notranslate"><span class="pre">ncclGroupStart</span></code> and <code class="docutils literal notranslate"><span class="pre">ncclGroupEnd</span></code> functions create a collective communication group that allows multiple NCCL operations to be executed together for improved performance, while the <code class="docutils literal notranslate"><span class="pre">ncclBroadcast</span></code> function copies data from a source GPU (specified by rank 0) to all other GPUs in the communicator, ensuring each device has an identical copy of matrix B:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span><span class="w"> </span><span class="nf">rccl_broadcast_matrix</span><span class="p">(</span><span class="n">RCCLContext</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="o">**</span><span class="w"> </span><span class="n">send_data</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">elements</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">CHECK_NCCL</span><span class="p">(</span><span class="n">ncclGroupStart</span><span class="p">());</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">num_gpus</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipSetDevice</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>
+<span class="w">        </span><span class="n">CHECK_NCCL</span><span class="p">(</span><span class="n">ncclBroadcast</span><span class="p">(</span><span class="n">send_data</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">send_data</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">elements</span><span class="p">,</span>
+<span class="w">                                </span><span class="n">ncclFloat</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">comms</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">streams</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">CHECK_NCCL</span><span class="p">(</span><span class="n">ncclGroupEnd</span><span class="p">());</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Once the broadcast is complete, each GPU performs matrix multiplication on its assigned chunk of matrix A while utilizing its full copy of matrix B. We pass matrix B as the first input matrix to the rocBLAS API instead of matrix A. This works because our matrices are in row-major order while rocBLAS expects column-major order. When passing row-major matrices to rocBLAS’s column-major API, each matrix is implicitly transposed. So passing <span class="math notranslate nohighlight">\((B,A)\)</span> in row-major becomes <span class="math notranslate nohighlight">\(B^T * A^T\)</span> in column-major, which equals <span class="math notranslate nohighlight">\((A * B)^T\)</span>. When we read the result back in row-major, it’s transposed again, giving us <span class="math notranslate nohighlight">\(A * B\)</span>. This lets us avoid explicit transpose operations while getting correct results:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span><span class="w"> </span><span class="nf">perform_matrix_multiplication</span><span class="p">(</span>
+<span class="w">    </span><span class="n">rocblas_handle</span><span class="o">*</span><span class="w"> </span><span class="n">handles</span><span class="p">,</span>
+<span class="w">    </span><span class="kt">float</span><span class="o">**</span><span class="w"> </span><span class="n">d_A_chunks</span><span class="p">,</span>
+<span class="w">    </span><span class="kt">float</span><span class="o">**</span><span class="w"> </span><span class="n">d_B</span><span class="p">,</span>
+<span class="w">    </span><span class="kt">float</span><span class="o">**</span><span class="w"> </span><span class="n">d_C_chunks</span><span class="p">,</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">N</span><span class="p">,</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">chunk_size</span><span class="p">,</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">num_gpus</span><span class="p">,</span>
+<span class="w">    </span><span class="n">hipStream_t</span><span class="o">*</span><span class="w"> </span><span class="n">streams</span><span class="p">,</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">NUM_RUNS</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0f</span><span class="p">;</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">float</span><span class="w"> </span><span class="n">beta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0f</span><span class="p">;</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">num_gpus</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipSetDevice</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>
+<span class="w">        </span><span class="n">CHECK_ROCBLAS</span><span class="p">(</span><span class="n">rocblas_sgemm</span><span class="p">(</span><span class="n">handles</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+<span class="w">                                   </span><span class="n">rocblas_operation_none</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">rocblas_operation_none</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="n">chunk_size</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span>
+<span class="w">                                   </span><span class="o">&amp;</span><span class="n">alpha</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">d_B</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">N</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">d_A_chunks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">N</span><span class="p">,</span>
+<span class="w">                                   </span><span class="o">&amp;</span><span class="n">beta</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">d_C_chunks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">N</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>After the multiplication, we collect the computed chunks using ncclAllGather - each GPU contributes its portion <code class="docutils literal notranslate"><span class="pre">chunks[i]</span></code> and every GPU receives a complete copy in <code class="docutils literal notranslate"><span class="pre">result[i]</span></code>. While each GPU ends up with an identical copy of the full result, we only copy GPU[0] version back to host memory:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span><span class="w"> </span><span class="nf">rccl_gather_matrix_chunks</span><span class="p">(</span><span class="n">RCCLContext</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="o">**</span><span class="w"> </span><span class="n">chunks</span><span class="p">,</span><span class="w"> </span><span class="kt">float</span><span class="o">**</span><span class="w"> </span><span class="n">result</span><span class="p">,</span>
+<span class="w">                             </span><span class="kt">size_t</span><span class="w"> </span><span class="n">chunk_elements</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">CHECK_NCCL</span><span class="p">(</span><span class="n">ncclGroupStart</span><span class="p">());</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">num_gpus</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipSetDevice</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>
+<span class="w">        </span><span class="n">CHECK_NCCL</span><span class="p">(</span><span class="n">ncclAllGather</span><span class="p">(</span><span class="n">chunks</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">chunk_elements</span><span class="p">,</span>
+<span class="w">                                </span><span class="n">ncclFloat</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">comms</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">streams</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">CHECK_NCCL</span><span class="p">(</span><span class="n">ncclGroupEnd</span><span class="p">());</span>
+<span class="p">}</span>
+
+<span class="c1">// In main(), we only copy GPU 0&#39;s result back to host</span>
+<span class="n">printf</span><span class="p">(</span><span class="s">&quot;Copying results back to host</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipSetDevice</span><span class="p">(</span><span class="mi">0</span><span class="p">));</span>
+<span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipMemcpy</span><span class="p">(</span><span class="n">h_C</span><span class="p">,</span><span class="w"> </span><span class="n">d_C_final</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="n">full_size</span><span class="p">,</span><span class="w"> </span><span class="n">hipMemcpyDeviceToHost</span><span class="p">));</span>
+</pre></div>
+</div>
+<p>To track performance across all GPUs, we use HIP events to measure computation time and calculate achieved TFLOPS for each device. Each GPU handles a portion of the matrix multiplication - since the input is evenly divided, each GPU does an equal share of the total floating point operations. The code records the start and stop times using HIP events, calculates how long each GPU took in milliseconds, and converts this timing into TFLOPS (trillions of floating point operations per second) to show each GPU’s computational speed:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="n">hipEvent_t</span><span class="w"> </span><span class="n">starts</span><span class="p">[</span><span class="n">num_gpus</span><span class="p">],</span><span class="w"> </span><span class="n">stops</span><span class="p">[</span><span class="n">num_gpus</span><span class="p">];</span>
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">num_gpus</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipEventCreate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">starts</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipEventRecord</span><span class="p">(</span><span class="n">starts</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">streams</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+<span class="w">    </span><span class="c1">// Perform computation</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipEventRecord</span><span class="p">(</span><span class="n">stops</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">streams</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+<span class="w">    </span><span class="kt">float</span><span class="w"> </span><span class="n">compute_time</span><span class="p">;</span>
+<span class="w">    </span><span class="n">CHECK_HIP</span><span class="p">(</span><span class="n">hipEventElapsedTime</span><span class="p">(</span><span class="o">&amp;</span><span class="n">compute_time</span><span class="p">,</span><span class="w"> </span><span class="n">starts</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">stops</span><span class="p">[</span><span class="n">i</span><span class="p">]));</span>
+<span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">tflops</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">chunk_flops</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">compute_time</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1000.0</span><span class="p">))</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e12</span><span class="p">;</span>
+<span class="w">    </span><span class="n">printf</span><span class="p">(</span><span class="s">&quot;GPU %d: Time: %.2f ms, Performance: %.2f TFLOPS</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span>
+<span class="w">           </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">compute_time</span><span class="p">,</span><span class="w"> </span><span class="n">tflops</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This implementation shows how we can scale matrix multiplication across multiple GPUs by combining RCCL’s inter-GPU communication with rocBLAS’s optimized computation. By dividing work evenly, coordinating data movement with <code class="docutils literal notranslate"><span class="pre">ncclBroadcast</span></code> and <code class="docutils literal notranslate"><span class="pre">ncclAllGather</span></code> operations, and letting each GPU process its chunk independently, we maintain the high performance of rocBLAS while distributing the computational load across the available hardware.</p>
+</section>
+</section>
+<section id="performance-analysis">
+<h2>Performance Analysis<a class="headerlink" href="#performance-analysis" title="Link to this heading">¶</a></h2>
+<p>We evaluated our distributed matrix multiplication implementation by first establishing a baseline using our previous <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul">single-GPU implementation</a>, then comparing it against our new multi-GPU RCCL code running on the same hardware. This approach allowed us to directly measure any overhead introduced by RCCL communication when scaling from single to multi-GPU execution.</p>
+<section id="benchmark-configuration">
+<h3>Benchmark Configuration<a class="headerlink" href="#benchmark-configuration" title="Link to this heading">¶</a></h3>
+<p>Our test environment consisted of:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><strong>Hardware</strong></dt><dd><ul>
+<li><p>AMD Instinct MI250X GPUs (1-8 GPUs)</p></li>
+<li><p>GPU Clock: 1700 MHz</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>Test Parameters</strong></dt><dd><ul>
+<li><p>Matrix Dimensions: 32,768 x 32,768 (FP32)</p></li>
+<li><p>25 consecutive multiplication runs per configuration</p></li>
+<li><p>ROCm 6.0.2</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>Implementations Tested</strong></dt><dd><ul>
+<li><p>Single GPU: Single-GPU <a class="reference external" href="https://github.com/pebblesandweeds/gpu_matmul">rocBLAS C implementation</a></p></li>
+<li><p>Multi-GPU: Mult-GPU <a class="reference external" href="https://github.com/pebblesandweeds/rccl_gpu_matmul">RCCL-based C implementation</a></p></li>
+<li><p>PyTorch: Distributed implementation for validation</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="multi-gpu-scaling-analysis">
+<h3>Multi-GPU Scaling Analysis<a class="headerlink" href="#multi-gpu-scaling-analysis" title="Link to this heading">¶</a></h3>
+<p>Our single-GPU baseline implementation achieved 34.58-35.87 TFLOPS for matrix multiplication, establishing our performance target for per-GPU throughput in the distributed system. When scaling to 8 GPUs using our new RCCL implementation, we observed per-GPU performance of 34.7-35.7 TFLOPS, resulting in aggregate system throughput of approximately 280 TFLOPS. The consistent per-GPU performance between single and multi-GPU execution demonstrates that RCCL’s broadcast and allGather operations impose minimal overhead with our horizontal partitioning strategy.</p>
+<ul class="simple">
+<li><p><strong>Single GPU Baseline</strong>: 34.58-35.87 TFLOPS (using previous gpu_matmul implementation)</p></li>
+<li><p><strong>Multi-GPU Range</strong>: 34.7-35.7 TFLOPS per GPU (using new RCCL implementation)</p></li>
+<li><p><strong>Aggregate Performance</strong>: ~280 TFLOPS across 8 GPUs</p></li>
+<li><p><strong>Scaling Efficiency</strong>: &gt;98% per-GPU performance maintained when scaling to 8 GPUs</p></li>
+</ul>
+</section>
+<section id="pytorch-implementation-comparison">
+<h3>PyTorch Implementation Comparison<a class="headerlink" href="#pytorch-implementation-comparison" title="Link to this heading">¶</a></h3>
+<p>To validate our C implementation, we developed an equivalent distributed PyTorch version that performs the same matrix broadcast and multiplication operations using torch.distributed primitives. The PyTorch implementation achieved similar performance characteristics after warm-up, matching our C code’s performance envelope. This verification demonstrates that our low-level RCCL and rocBLAS implementation achieves comparable efficiency to PyTorch’s optimized framework while providing direct control over the distributed computation pattern.</p>
+<ul class="simple">
+<li><p><strong>Per-GPU Range</strong>: 34.6-35.7 TFLOPS</p></li>
+<li><p><strong>Aggregate Performance</strong>: ~280 TFLOPS</p></li>
+<li><p><strong>Implementation</strong>: Uses torch.distributed for matrix broadcast and distributed computation</p></li>
+</ul>
+</section>
+</section>
+<section id="conclusion">
+<h2>Conclusion<a class="headerlink" href="#conclusion" title="Link to this heading">¶</a></h2>
+<p>Our exploration of multi-GPU matrix multiplication using AMD’s RCCL and rocBLAS libraries demonstrated how to efficiently scale matrix operations across multiple devices while maintaining high per-GPU performance. Starting with our previous single-GPU implementation that achieved 34.58-35.87 TFLOPS, we showed that distributing 32,768 x 32,768 matrices across 8 GPUs could deliver ~280 TFLOPS of aggregate performance while maintaining equivalent per-GPU throughput (34.7-35.7 TFLOPS). This near-linear scaling emphasizes the efficiency of our RCCL-based coordination approach for large-scale computations.</p>
+<p>Both the PyTorch and C implementations produced nearly identical performance results, with both reaching approximately 280 TFLOPS. This confirms that while high-level frameworks like PyTorch simplify distributed programming, low-level programming with RCCL and rocBLAS offers comparable efficiency while providing deeper insight into GPU communication patterns and distributed memory management. Most importantly, our horizontal partitioning strategy proved effective, reducing per-GPU memory requirements from 12.87 GB to ~5.36 GB while maintaining the baseline computational throughput of our original single-GPU implementation - demonstrating the practical benefits of distributed GPU computing for handling large-scale matrix operations in deep learning workloads.</p>
+<p>Thanks for reading! For more details, check out our GitHub repository. Stay tuned for future blogs where we’ll explore more advanced topics in distributed GPU computing.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">rccl_gpu_matmul</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#scaling-matrix-multiplication-from-single-to-multi-gpu-systems">Scaling Matrix Multiplication: From Single to Multi-GPU Systems</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#implementing-multi-gpu-matrix-multiplication">Implementing Multi-GPU Matrix Multiplication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#performance-analysis">Performance Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#conclusion">Conclusion</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">rccl_gpu_matmul documentation</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, Pebbles and Weeds.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.0.2</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/rccl_gpu_matmul.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
