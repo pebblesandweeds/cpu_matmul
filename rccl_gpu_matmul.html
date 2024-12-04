@@ -5,17 +5,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS &#8212; rccl_gpu_matmul  documentation</title>
+    <title>Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS &#8212; Pebbles and Weeds Blog 1.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
     <link rel="stylesheet" type="text/css" href="_static/basic.css?v=c058f7c8" />
-    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
-    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=ec641305" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=a43d319b" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
     <script src="_static/doctools.js?v=9a2dae69"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="canonical" href="https://blog.pebblesandweeds.com/rccl_gpu_matmul.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="rccl_gpu_matmul documentation" href="index.html" />
+    <link rel="prev" title="Accelerating Matrix Multiplication on AMD GPUs with rocBLAS in C" href="gpu_matmul_blog.html" />
    
   <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   
@@ -325,10 +327,24 @@
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-<h1 class="logo"><a href="index.html">rccl_gpu_matmul</a></h1>
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/pebblesandweeds.png" alt="Logo" />
+    
+  </a>
+</p>
 
 
 
+<p class="blurb">A detailed guide to CPU Matrix Multiplication in C</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=pebblesandweeds&repo=cpu_matmul&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
 
 
 
@@ -344,8 +360,9 @@
     </div>
 </search>
 <script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
-<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="cpu_matmul_blog.html">CPU Matrix Multiplication from Scratch in C</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gpu_matmul_blog.html">Accelerating Matrix Multiplication on AMD GPUs with rocBLAS in C</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#scaling-matrix-multiplication-from-single-to-multi-gpu-systems">Scaling Matrix Multiplication: From Single to Multi-GPU Systems</a></li>
@@ -360,7 +377,7 @@
 <h3>Related Topics</h3>
 <ul>
   <li><a href="index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="index.html" title="previous chapter">rccl_gpu_matmul documentation</a></li>
+      <li>Previous: <a href="gpu_matmul_blog.html" title="previous chapter">Accelerating Matrix Multiplication on AMD GPUs with rocBLAS in C</a></li>
   </ul></li>
 </ul>
 </div>
@@ -378,10 +395,6 @@
     </div>
     <div class="footer">
       &#169;2024, Pebbles and Weeds.
-      
-      |
-      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.0.2</a>
-      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
       
       |
       <a href="_sources/rccl_gpu_matmul.rst.txt"
