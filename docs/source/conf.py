@@ -41,6 +41,12 @@ html_theme_options = {
     'note_bg': '#FFF59C',
 }
 
+# Sidebar only on index page, not on blog pages
+html_sidebars = {
+    'index': ['about.html', 'navigation.html'],  # Show sidebar components only on index.html
+    '**': []  # No sidebar on all other pages
+}
+
 html_static_path = ['_static']
 html_css_files = [
     'custom.css',  # Ensure this matches the path where your CSS is located
@@ -58,4 +64,3 @@ html_meta = {
 extensions.append('sphinx_sitemap')
 html_baseurl = 'https://blog.pebblesandweeds.com/'  # Replace with your actual URL
 sitemap_filename = 'sitemap.xml'
-
