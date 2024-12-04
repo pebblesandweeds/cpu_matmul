@@ -1,3 +1,5 @@
+.. _rccl-matrix-multiplication:
+
 Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS
 ============================================================================
 
