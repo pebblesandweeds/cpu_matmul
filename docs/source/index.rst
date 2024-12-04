@@ -7,6 +7,7 @@ Blog Entries
 
 * `CPU Matrix Multiplication <cpu_matmul_blog.html>`_
 * `GPU Matrix Multiplication with rocBLAS <gpu_matmul_blog.html>`_
+* `GPU Matrix Multiplication with RCCL <rccl_gpu_matmul.html>`_
 
 Presentations
 =============
@@ -25,3 +26,4 @@ Links
 
    cpu_matmul_blog
    gpu_matmul_blog
+   rccl_gpu_matmul
