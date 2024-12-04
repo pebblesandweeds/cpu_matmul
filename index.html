@@ -39,11 +39,41 @@
 <h1>Pebbles and Weeds Blog<a class="headerlink" href="#pebbles-and-weeds-blog" title="Link to this heading">¶</a></h1>
 <section id="blog-entries">
 <h2>Blog Entries<a class="headerlink" href="#blog-entries" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><a class="reference external" href="cpu_matmul_blog.html">CPU Matrix Multiplication</a></p></li>
-<li><p><a class="reference external" href="gpu_matmul_blog.html">GPU Matrix Multiplication with rocBLAS</a></p></li>
-<li><p><a class="reference external" href="rccl_gpu_matmul.html">GPU Matrix Multiplication with RCCL</a></p></li>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="cpu_matmul_blog.html">CPU Matrix Multiplication from Scratch in C</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#why-is-matrix-multiplication-important">Why is Matrix Multiplication Important?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#matrix-multiplication-on-cpus-written-in-c">Matrix Multiplication on CPUs Written in C</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#benchmarking-setup-and-code-organization">Benchmarking Setup and Code Organization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#naive-matrix-multiplication">Naive Matrix Multiplication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#optimizing-matrix-multiplication">Optimizing Matrix Multiplication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#vectorized-matrix-multiplication">Vectorized Matrix Multiplication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#conclusion">Conclusion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cpu_matmul_blog.html#further-reading">Further Reading</a></li>
 </ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="gpu_matmul_blog.html">Accelerating Matrix Multiplication on AMD GPUs with rocBLAS in C</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#matrix-multiplication-cpus-vs-gpus">Matrix Multiplication: CPUs vs. GPUs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#amd-gpu-programming-in-c">AMD GPU Programming in C</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#gpu-matrix-multiplication-with-rocblas">GPU Matrix Multiplication with rocBLAS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#matrix-setup-and-code-breakdown">Matrix Setup and Code Breakdown</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#pytorch-implementation-abstracting-rocblas">PyTorch Implementation: Abstracting rocBLAS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#c-implementation-direct-rocblas-integration">C Implementation: Direct rocBLAS Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gpu_matmul_blog.html#conclusion">Conclusion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="rccl_gpu_matmul.html">Scaling Matrix Multiplication Across Multiple AMD GPUs with RCCL and rocBLAS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="rccl_gpu_matmul.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rccl_gpu_matmul.html#scaling-matrix-multiplication-from-single-to-multi-gpu-systems">Scaling Matrix Multiplication: From Single to Multi-GPU Systems</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rccl_gpu_matmul.html#implementing-multi-gpu-matrix-multiplication">Implementing Multi-GPU Matrix Multiplication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rccl_gpu_matmul.html#performance-analysis">Performance Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rccl_gpu_matmul.html#conclusion">Conclusion</a></li>
+</ul>
+</li>
+</ul>
+</div>
 </section>
 <section id="presentations">
 <h2>Presentations<a class="headerlink" href="#presentations" title="Link to this heading">¶</a></h2>
