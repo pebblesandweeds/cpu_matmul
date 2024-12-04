@@ -5,12 +5,9 @@ Pebbles and Weeds Blog
 Blog Entries
 ============
 
-.. toctree::
-   :maxdepth: 2
-
-   cpu_matmul_blog
-   gpu_matmul_blog
-   rccl_gpu_matmul
+* `CPU Matrix Multiplication <cpu_matmul_blog.html>`_
+* `GPU Matrix Multiplication with rocBLAS <gpu_matmul_blog.html>`_
+* `GPU Matrix Multiplication with RCCL <rccl_gpu_matmul.html>`_
 
 Presentations
 =============
@@ -23,6 +20,10 @@ Links
 
 * `LinkedIn <https://www.linkedin.com/in/keith-anderson-2480b027/>`_
 
-.. Hidden toctree to silence warnings
 .. toctree::
+   :maxdepth: 2
    :hidden:
+
+   cpu_matmul_blog
+   gpu_matmul_blog
+   rccl_gpu_matmul
